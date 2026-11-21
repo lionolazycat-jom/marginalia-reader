@@ -7,7 +7,7 @@ import { loadFlowBook } from './formats.js';
 import { openPdf, PdfPasswordNeeded } from './pdfcore.js';
 import { FlowEngine, hasSelection } from './flow.js';
 import { PdfEngine } from './pdfview.js';
-import { reflowPdf, REFLOW_VERSION } from './pdfreflow.js';
+import { reflowPdf, REFLOW_VERSION, pdfLooksPlain } from './pdfreflow.js';
 import { db } from './db.js';
 import * as ambient from './ambient.js';
 import { openVoicePicker, toneOf } from './voices.js';
@@ -38,6 +38,14 @@ class Reader {
   get settings() { return { ...state.reading, ...(this.book.settings || {}) }; }
   get isPdf() { return this.engine ? this.engine.kind === 'pdf' : this.book.format === 'pdf' && this.view !== 'book'; }
   get isPdfBook() { return this.book.format === 'pdf'; }
+  updateViewBtn() {
+    if (!this.viewBtn) return;
+    this.viewBtn.hidden = !this.canBookView;
+    const book = this.view === 'book';
+    this.viewBtn.querySelector('.rd-lbl').textContent = book ? 'Book view' : 'Original';
+    this.viewBtn.setAttribute('aria-label', book ? 'Book view. Switch to the original pages (V)' : 'Original pages. Switch to Book view (V)');
+    this.viewBtn.title = this.viewBtn.getAttribute('aria-label');
+  }
   bookAnns() { return state.annotations.filter((a) => a.bookId === this.book.id); }
   bookMarks() { return state.bookmarks.filter((a) => a.bookId === this.book.id); }
 
@@ -57,14 +65,21 @@ class Reader {
       const blob = await bookFile(this.book.id);
       if (!blob) throw new Error('The book file is missing from this device. Import the file again to read it; your highlights and notes are kept.');
       if (this.isPdfBook) {
-        if (this.opts.loc) this.view = this.opts.loc.ch != null ? 'book' : 'original';
-        else this.view = this.opts.view || this.book.pdfView || null;
-        if (!this.view) {
-          this.view = await this.chooseView();
-          await updateBook(this.book, { pdfView: this.view });
-        }
         const doc = await openPdf(blob, (retry) => this.askPassword(retry));
         if (this.book.locked) updateBook(this.book, { locked: false, pages: doc.numPages });
+        // Book view is only offered for plain, text-first PDFs; designed ones stay as the original pages.
+        if (this.book.plainPdf == null) { this.book.plainPdf = await pdfLooksPlain(doc); updateBook(this.book, { plainPdf: this.book.plainPdf }); }
+        this.canBookView = !!this.book.plainPdf;
+        this.updateViewBtn();
+        if (!this.canBookView) { this.view = 'original'; this.opts.loc = this.opts.loc?.ch != null ? null : this.opts.loc; if (this.book.pdfView === 'book') updateBook(this.book, { pdfView: 'original' }); }
+        else {
+          if (this.opts.loc) this.view = this.opts.loc.ch != null ? 'book' : 'original';
+          else this.view = this.opts.view || this.book.pdfView || null;
+          if (!this.view) {
+            this.view = await this.chooseView();
+            await updateBook(this.book, { pdfView: this.view });
+          }
+        }
         let content = null;
         if (this.view === 'book') {
           content = await this.bookViewContent(doc);
@@ -75,6 +90,7 @@ class Reader {
           }
         }
         this.root.dataset.view = this.view;
+        this.updateViewBtn();
         if (content) {
           this.pdfDoc = doc;
           this.engine = new FlowEngine(this.stage, content, this.engineCallbacks());
@@ -214,7 +230,7 @@ class Reader {
   }
 
   async switchView(v) {
-    if (!this.isPdfBook || v === this.view) return;
+    if (!this.isPdfBook || !this.canBookView || v === this.view) return;
     let loc = null;
     if (this.info) {
       if (this.view === 'book') { const pg = this.flowLocToPage(this.info.loc); loc = pg != null ? { page: pg, y: 0 } : null; }
@@ -251,24 +267,45 @@ class Reader {
   // ---------------- chrome ----------------
   buildChrome() {
     const ui = state.ui.toolbar;
-    const tb = (key, ico, label, fn, extra) => (ui[key] === false ? null : iconBtn(ico, label, fn, { class: `rd-btn rd-${key}`, ...extra }));
+    const LBL = { toc: 'Contents', search: 'Search', annotations: 'Notes', tts: 'Listen', sounds: 'Sounds', bookmark: 'Bookmark', display: 'Display', fullscreen: 'Full screen' };
+    const tb = (key, ico, label, fn, extra) => { if (ui[key] === false) return null; const b = iconBtn(ico, label, fn, { class: `rd-btn rd-${key}`, ...extra }); b.append(h('span.rd-lbl', LBL[key] || '')); return b; };
     this.titleEl = h('div.rd-title', h('div.rd-book', this.book.title), h('div.rd-chapter', this.book.author || ''));
     this.bookmarkBtn = tb('bookmark', 'bookmark', 'Bookmark this page (B)', () => this.toggleBookmark());
+    this.viewBtn = this.isPdfBook ? iconBtn('book', 'Switch between Book view and original pages (V)', () => this.switchView(this.view === 'book' ? 'original' : 'book'), { class: 'rd-btn rd-viewtoggle' }) : null;
+    this.viewBtn?.append(h('span.rd-lbl', 'Original'));
+    this.viewBtn && (this.viewBtn.hidden = true);
+    this.tools = {
+      toc: tb('toc', 'toc', 'Contents (T)', () => this.togglePanel('toc')),
+      search: tb('search', 'search', 'Search in book (/)', () => this.togglePanel('search')),
+      annotations: tb('annotations', 'highlight', 'Highlights & notes (H)', () => this.togglePanel('annotations')),
+      tts: tb('tts', 'speaker', 'Read aloud (R)', () => this.toggleTts()),
+      sounds: tb('sounds', 'waves', 'Background sounds (S)', () => this.togglePanel('sounds')),
+      bookmark: this.bookmarkBtn,
+    };
+    this.displayBtn = tb('display', 'type', 'Display settings (A)', () => this.togglePanel('display'));
+    this.fsBtn = tb('fullscreen', 'fullscreen', 'Full screen (F)', () => this.toggleFullscreen());
+    this.moreBtn = iconBtn('more', 'More options', (e) => this.moreMenu(e.currentTarget), { class: 'rd-btn rd-more' });
+    this.toolsEl = h('div.rd-tools', ...Object.values(this.tools).slice(0, 5), this.viewBtn, this.displayBtn, this.bookmarkBtn, this.fsBtn, this.moreBtn);
     this.top = h('header.rd-top', { role: 'toolbar', 'aria-label': 'Reading tools' },
       iconBtn('back', 'Back to library', () => this.close(), { class: 'rd-btn rd-back' }),
       this.titleEl,
-      h('div.rd-tools',
-        tb('toc', 'toc', 'Contents (T)', () => this.togglePanel('toc')),
-        tb('search', 'search', 'Search in book (/)', () => this.togglePanel('search')),
-        tb('annotations', 'highlight', 'Highlights & notes (H)', () => this.togglePanel('annotations')),
-        tb('tts', 'speaker', 'Read aloud (R)', () => this.toggleTts()),
-        tb('sounds', 'waves', 'Background sounds (S)', () => this.togglePanel('sounds')),
-        this.book.format === 'pdf' ? iconBtn('book', 'Switch between Book view and original pages (V)', () => this.switchView(this.view === 'book' ? 'original' : 'book'), { class: 'rd-btn rd-viewtoggle' }) : null,
-        tb('display', 'type', 'Display settings (A)', () => this.togglePanel('display')),
-        this.bookmarkBtn,
-        tb('fullscreen', 'fullscreen', 'Full screen (F)', () => this.toggleFullscreen()),
-        iconBtn('more', 'More options', (e) => this.moreMenu(e.currentTarget), { class: 'rd-btn' }),
-      ));
+      this.toolsEl);
+    // On a phone the main tools sit in a labelled strip at the bottom, where the thumb is.
+    this.dock = h('div.rd-dock', { role: 'toolbar', 'aria-label': 'Reader tools' });
+    const mq = matchMedia('(max-width: 700px)');
+    const place = () => {
+      const order = ['toc', 'search', 'annotations', 'tts', 'sounds', 'bookmark'].map((k) => this.tools[k]).filter(Boolean);
+      if (mq.matches) order.forEach((el) => this.dock.append(el));
+      else {
+        for (const el of order) {
+          if (el === this.bookmarkBtn) this.toolsEl.insertBefore(el, this.fsBtn || this.moreBtn);
+          else this.toolsEl.insertBefore(el, this.viewBtn || this.displayBtn || this.bookmarkBtn || this.fsBtn || this.moreBtn);
+        }
+      }
+    };
+    place();
+    mq.addEventListener('change', place);
+    this.unsubs.push(() => mq.removeEventListener('change', place));
     this.slider = h('input.rd-slider', { type: 'range', min: 0, max: 1000, step: 1, value: 0, 'aria-label': 'Reading position' });
     this.slider.addEventListener('input', () => this.previewSlider());
     this.slider.addEventListener('change', () => { this.engine?.goToFraction(this.slider.value / 1000); this.sliderTip.hidden = true; });
@@ -277,6 +314,7 @@ class Reader {
     this.leftLabel = h('span.rd-left', '');
     this.pctLabel = h('span.rd-pct', '');
     this.bottom = h('footer.rd-bottom',
+      this.dock,
       iconBtn('chevronL', 'Previous page', () => this.engine?.prev(), { class: 'rd-btn rd-prev' }),
       h('div.rd-progress', h('div.rd-slider-wrap', this.slider, this.sliderTip), h('div.rd-meta', this.posLabel, this.leftLabel, this.pctLabel)),
       iconBtn('chevronR', 'Next page', () => this.engine?.next(), { class: 'rd-btn rd-next' }));
@@ -351,7 +389,7 @@ class Reader {
         { label: 'Background sounds', icon: 'waves', run: () => this.togglePanel('sounds', true) },
         { label: 'Full screen', icon: 'fullscreen', run: () => this.toggleFullscreen() },
         'sep'] : []),
-      ...(this.isPdfBook ? [{ label: this.view === 'book' ? 'Show original pages' : 'Read in Book view', icon: this.view === 'book' ? 'copy' : 'book', run: () => this.switchView(this.view === 'book' ? 'original' : 'book') }] : []),
+      ...(this.isPdfBook && this.canBookView ? [{ label: this.view === 'book' ? 'Show original pages' : 'Read in Book view', icon: this.view === 'book' ? 'copy' : 'book', run: () => this.switchView(this.view === 'book' ? 'original' : 'book') }] : []),
       { label: 'Book details', icon: 'book', run: () => this.showDetails() },
       { label: 'Export highlights & notes', icon: 'download', run: () => exportBookAnnotations(this.book) },
       { label: perBook ? 'Use my default settings' : 'Keep these settings for this book', icon: 'sliders', run: () => this.setPerBook(!perBook) },
@@ -463,7 +501,7 @@ class Reader {
 
   rebuildToolbarVisibility() {
     for (const key of Object.keys(TOOLBAR_ITEMS)) {
-      const b = $(`.rd-${key}`, this.top);
+      const b = $(`.rd-${key}`, this.root);
       if (b) b.hidden = state.ui.toolbar[key] === false;
     }
   }
@@ -505,7 +543,7 @@ class Reader {
       case 'r': case 'R': handled(); this.toggleTts(); break;
       case 'm': case 'M': handled(); this.toggleChrome(); break;
       case 's': case 'S': handled(); this.togglePanel('sounds'); break;
-      case 'v': case 'V': if (this.isPdfBook) { handled(); this.switchView(this.view === 'book' ? 'original' : 'book'); } break;
+      case 'v': case 'V': if (this.isPdfBook && this.canBookView) { handled(); this.switchView(this.view === 'book' ? 'original' : 'book'); } break;
       case '+': case '=': handled(); this.bumpSize(1); break;
       case '-': case '_': handled(); this.bumpSize(-1); break;
       case '0': if (this.isPdf) { handled(); this.setSetting('zoom', 'auto'); } break;
@@ -948,7 +986,7 @@ class Reader {
     body.append(h('div.slider-row', h('label', { for: 'snd-master' }, 'Overall'), mv, h('span')));
     if (ambient.anyPlaying()) body.append(h('button.btn.btn-block', { type: 'button', onclick: () => { ambient.stopAll(); this.renderPanel(); this.updateSoundsBtn(); } }, icon('stop', 16), 'Stop all sounds'));
   }
-  updateSoundsBtn() { $('.rd-sounds', this.top)?.classList.toggle('active', ambient.anyPlaying()); }
+  updateSoundsBtn() { $('.rd-sounds', this.root)?.classList.toggle('active', ambient.anyPlaying()); }
 
   renderAnnPanel(body) {
     const anns = this.bookAnns().sort((a, b) => (a.progress || 0) - (b.progress || 0));
@@ -1001,7 +1039,7 @@ class Reader {
       const c = k === 'custom' ? { bg: s.customBg, fg: s.customFg } : t;
       return h('button', { type: 'button', class: `theme-sw ${s.theme === k ? 'on' : ''}`, 'aria-pressed': s.theme === k ? 'true' : 'false', dataset: { theme: k }, style: { '--tb': c.bg, '--tf': c.fg }, onclick: () => this.setSetting('theme', k) }, h('span.theme-aa', 'Aa'), h('span.theme-name', t.label));
     }));
-    if (this.isPdfBook) {
+    if (this.isPdfBook && this.canBookView) {
       const vs = h('div.seg.view-seg', { role: 'group', 'aria-label': 'PDF view' }, [['book', 'Book view', 'book'], ['original', 'Original pages', 'copy']].map(([v, l, ic]) =>
         h('button', { type: 'button', class: this.view === v ? 'on' : '', 'aria-pressed': this.view === v ? 'true' : 'false', onclick: () => this.switchView(v) }, icon(ic, 16), h('span', l))));
       const fix = this.view === 'book' ? h('button.btn.btn-block.ghost', { type: 'button', onclick: () => this.rebuildBookView() }, this.book.reflowMode === 'join' ? 'Rebuild with automatic paragraphs' : 'Fix broken lines and paragraphs') : null;
@@ -1247,7 +1285,7 @@ class Speaker {
     this.unlockScreen();
     ambient.duck(false);
     this.r.root.classList.remove('tts-on');
-    $('.rd-tts', this.r.top)?.classList.remove('active');
+    $('.rd-tts', this.r.root)?.classList.remove('active');
   }
   destroy() { this.stop(); document.removeEventListener('visibilitychange', this.onVis); }
 
@@ -1301,7 +1339,7 @@ class Speaker {
       iconBtn('close', 'Stop reading aloud', () => this.stop(), { class: 'mini-btn' }));
     this.r.root.append(this.bar);
     this.r.root.classList.add('tts-on');
-    $('.rd-tts', this.r.top)?.classList.add('active');
+    $('.rd-tts', this.r.root)?.classList.add('active');
     this.r.showChrome(true);
   }
   updateBar() {

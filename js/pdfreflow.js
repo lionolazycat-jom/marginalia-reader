@@ -3,7 +3,7 @@
 // hyphenated line breaks are joined, paragraphs and headings are detected from spacing and
 // font size, and chapters come from the PDF's outline (or its large headings).
 
-import { pdfOutline } from './pdfcore.js';
+import { pdfOutline, getPdfjs } from './pdfcore.js';
 
 export const REFLOW_VERSION = 6;
 
@@ -328,4 +328,46 @@ function edgeLines(p) {
   const sorted = [...p.lines].sort((a, b) => a.top - b.top);
   const topBand = p.height * 0.09, bottomBand = p.height * 0.91;
   return [...sorted.slice(0, 2).filter((l) => l.top < topBand), ...sorted.slice(-2).filter((l) => l.top > bottomBand)];
+}
+
+
+/**
+ * Is this a plain, text-first PDF (a novel, an article, a Word export) that Book view
+ * can rebuild well? Designed PDFs with pictures, colour, shapes or mixed type sizes
+ * look better as the original pages, so Book view is only offered for plain ones.
+ */
+export async function pdfLooksPlain(doc) {
+  try {
+    const lib = await getPdfjs();
+    const O = lib.OPS || {};
+    const n = doc.numPages;
+    const picks = [...new Set([2, 3, Math.round(n * 0.3), Math.round(n * 0.5), Math.round(n * 0.7)].map((p) => Math.min(n, Math.max(1, p))))].slice(0, 5);
+    const imgOps = new Set([O.paintImageXObject, O.paintInlineImageXObject, O.paintImageMaskXObject, O.paintImageXObjectRepeat].filter((x) => x != null));
+    const shapeOps = new Set([O.fill, O.eoFill, O.fillStroke, O.eoFillStroke, O.shadingFill, O.paintShading].filter((x) => x != null));
+    const colorOps = new Set([O.setFillRGBColor, O.setFillGray, O.setFillCMYKColor].filter((x) => x != null));
+    let seen = 0, plain = 0;
+    for (const pn of picks) {
+      const page = await doc.getPage(pn);
+      const tc = await page.getTextContent();
+      const items = tc.items.filter((i) => i.str && i.str.trim());
+      const chars = items.reduce((a, i) => a + i.str.length, 0);
+      seen++;
+      if (chars < 250) continue;
+      const sizes = new Map();
+      for (const it of items) { const sz = Math.round(Math.hypot(it.transform[2], it.transform[3]) * 2) / 2; sizes.set(sz, (sizes.get(sz) || 0) + it.str.length); }
+      const body = Math.max(...sizes.values()) / chars;
+      const ops = await page.getOperatorList();
+      let imgs = 0, shapes = 0; const colors = new Set();
+      ops.fnArray.forEach((fn, i) => {
+        if (imgOps.has(fn)) imgs++;
+        else if (shapeOps.has(fn)) shapes++;
+        else if (colorOps.has(fn)) colors.add(fn + ':' + Array.from(ops.argsArray[i] || []).map((v) => (typeof v === 'number' ? v.toFixed(2) : v)).join(','));
+      });
+      if (body >= 0.72 && imgs <= 1 && shapes <= 8 && colors.size <= 3) plain++;
+    }
+    return seen > 0 && plain / seen >= 0.6;
+  } catch (e) {
+    console.warn('plain check', e);
+    return false;
+  }
 }

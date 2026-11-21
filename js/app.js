@@ -209,7 +209,7 @@ function bookMenu(anchor, b) {
   menu(anchor, [
     { label: 'Open', icon: 'book', run: () => openBook(b) },
     { label: 'Edit details & categories', icon: 'edit', run: () => editBook(b) },
-    ...(b.format === 'pdf' ? [{ label: 'Choose view: Book or original pages…', icon: 'book', run: async () => { await updateBook(b, { pdfView: null }); openBook(b); } }] : []),
+    ...(b.format === 'pdf' && b.plainPdf !== false ? [{ label: 'Choose view: Book or original pages…', icon: 'book', run: async () => { await updateBook(b, { pdfView: null }); openBook(b); } }] : []),
     { label: 'Collections…', icon: 'collection', run: () => pickCollections(b) },
     { label: b.finishedAt ? 'Mark as unread' : 'Mark as finished', icon: 'check', run: () => updateBook(b, b.finishedAt ? { finishedAt: null } : { finishedAt: Date.now(), progress: Math.max(b.progress, 1) }) },
     { label: 'Reset reading progress', icon: 'back', run: () => updateBook(b, { progress: 0, location: null, pageLabel: '', finishedAt: null }) },
