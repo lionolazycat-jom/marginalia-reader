@@ -872,3 +872,16 @@ body.is-reading .app { visibility: hidden; }
 .size-row .size-btn { flex: 0 0 40px; height: 40px; border: 1px solid var(--rd-line); border-radius: 10px; }
 /* Phone held sideways: slimmer side panel so the pages stay visible while you adjust */
 @media (max-height: 520px) and (orientation: landscape) { .rd-panel { width: min(330px, 42vw); } }
+
+/* Voice picker */
+.tts-voice { padding: 6px 10px; border: 1px solid var(--rd-line); border-radius: 10px; background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted, #77726A); margin: 14px 0 6px; }
+.vp-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.vp-chip { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line, #ddd); background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.vp-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.vp-list { margin-top: 14px; max-height: 38vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.vp-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line, #ddd); border-radius: 12px; }
+.vp-item.on { border-color: var(--accent); }
+.vp-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.vp-name span { font-size: 12px; color: var(--muted, #77726A); }
+.vp-help { margin-top: 12px; font-size: 13px; } .vp-help p { margin: 6px 0; }

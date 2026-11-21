@@ -10,6 +10,7 @@ import { PdfEngine } from './pdfview.js';
 import { reflowPdf, REFLOW_VERSION } from './pdfreflow.js';
 import { db } from './db.js';
 import * as ambient from './ambient.js';
+import { openVoicePicker, toneOf } from './voices.js';
 import { exportBookAnnotations } from './exporter.js';
 
 let current = null;
@@ -1191,7 +1192,8 @@ class Speaker {
     const tok = ++this.token;
     const style = VOICE_STYLES[state.ui.ttsStyle] || VOICE_STYLES.natural;
     const u = new SpeechSynthesisUtterance(seg.text);
-    let rate = (state.ui.ttsRate || 1) * style.rate, pitch = (state.ui.ttsPitch || 1) * style.pitch;
+    const tone = toneOf();
+    let rate = (state.ui.ttsRate || 1) * style.rate * tone.rate, pitch = (state.ui.ttsPitch || 1) * style.pitch * tone.pitch;
     if (style.expressive) {
       if (/[?]["'”’»)]*$/.test(seg.text)) pitch *= 1.08;
       else if (/!["'”’»)]*$/.test(seg.text)) { pitch *= 1.06; rate *= 1.04; }
@@ -1272,14 +1274,12 @@ class Speaker {
     if (this.bar) return;
     const rate = h('select.tts-rate', { 'aria-label': 'Speed' }, [0.75, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2].map((r) => h('option', { value: r, selected: (state.ui.ttsRate || 1) === r }, `${r}×`)));
     rate.addEventListener('change', () => { saveUI({ ttsRate: +rate.value }); this.restartSentence(); });
-    const voice = h('select.tts-voice', { 'aria-label': 'Voice' });
+    const voice = h('button.tts-voice', { type: 'button', 'aria-label': 'Choose voice', onclick: () => openVoicePicker({ voices: this.voices, lang: this.r.book.language, onChange: () => { this.renderVoices(); this.restartSentence(); } }) });
     this.renderVoices = () => {
-      voice.textContent = '';
-      voice.append(h('option', { value: '' }, 'Automatic voice'));
-      for (const v of sortVoices(this.voices, this.r.book.language)) voice.append(h('option', { value: v.voiceURI, selected: v.voiceURI === state.ui.ttsVoice }, `${v.name} (${v.lang})`));
+      const v = this.voices.find((x) => x.voiceURI === state.ui.ttsVoice);
+      voice.textContent = v ? v.name.replace(/^(Microsoft|Google)\s+/i, '') : 'Voice…';
     };
     this.renderVoices();
-    voice.addEventListener('change', () => { saveUI({ ttsVoice: voice.value }); this.restartSentence(); });
     const sleepOpts = [['off', 'Sleep timer'], ['10', '10 min'], ['20', '20 min'], ['30', '30 min'], ['45', '45 min'], ['60', '1 hour'], ['chapter', 'End of chapter']];
     this.sleepSel = h('select.tts-sleep', { 'aria-label': 'Sleep timer' }, sleepOpts.map(([v, l]) => h('option', { value: v, dataset: { label: l } }, l)));
     this.sleepSel.addEventListener('change', () => this.setSleep(this.sleepSel.value));
