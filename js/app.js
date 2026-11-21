@@ -9,10 +9,12 @@ import { openReader, activeReader, showShortcuts, listVoices, sortVoices, VOICE_
 import { installState, promptInstall, onInstallChange, initPwa } from './pwa.js';
 import { exportAnnotationList, report, safeName } from './exporter.js';
 import { WELCOME_MD } from './welcome.js';
+import { SHELVES, LANGUAGES, search as searchFree, downloadBook, gutenbergPage } from './freebooks.js';
 
 const NAV = [
   ['home', 'Home', 'home'],
   ['library', 'Library', 'library'],
+  ['free', 'Free books', 'gift'],
   ['collections', 'Collections', 'collection'],
   ['bookmarks', 'Bookmarks', 'bookmark'],
   ['highlights', 'Highlights', 'highlight'],
@@ -105,9 +107,9 @@ function buildShell() {
   onInstallChange(() => { drawInstall(); if (view === 'preferences') rerender(); });
   const tab = $('#tabbar');
   tab.textContent = '';
-  const tabs = [['home', 'Home', 'home'], ['library', 'Library', 'library'], ['highlights', 'Highlights', 'highlight'], ['notes', 'Notes', 'note']];
+  const tabs = [['home', 'Home', 'home'], ['library', 'Library', 'library'], ['free', 'Free books', 'gift'], ['highlights', 'Highlights', 'highlight']];
   tab.append(...tabs.map(([k, l, ic]) => h('a.tab', { href: '#' + k, dataset: { view: k } }, icon(ic, 22), h('span', l))),
-    h('button.tab', { type: 'button', onclick: (e) => menu(e.currentTarget, [['collections', 'Collections', 'collection'], ['bookmarks', 'Bookmarks', 'bookmark'], ['stats', 'Statistics', 'stats'], ['preferences', 'Preferences', 'settings']].map(([k, l, ic]) => ({ label: l, icon: ic, run: () => go(k) }))) }, icon('menu', 22), h('span', 'More')));
+    h('button.tab.tab-more', { type: 'button', onclick: (e) => menu(e.currentTarget, [['notes', 'Notes', 'note'], ['collections', 'Collections', 'collection'], ['bookmarks', 'Bookmarks', 'bookmark'], ['stats', 'Statistics', 'stats'], ['preferences', 'Preferences', 'settings']].map(([k, l, ic]) => ({ label: l, icon: ic, run: () => go(k) }))) }, icon('menu', 22), h('span', 'More')));
   // Phones mislabel book files (an .epub often shows as "unknown"), so a type filter there
   // greys files out or hides the Files/folder option. Only desktops get the filter.
   const touch = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -122,6 +124,9 @@ function rerender() {
   const same = main.dataset.view === view + (viewArg || '');
   main.dataset.view = view + (viewArg || '');
   for (const a of $$('[data-view]')) a.classList.toggle('active', a.dataset.view === view || (view === 'collection' && a.dataset.view === 'collections'));
+  // On phones, sections reached from "More" light up the More tab.
+  const inTabs = ['home', 'library', 'free', 'highlights'].includes(view);
+  $('#tabbar .tab-more')?.classList.toggle('active', !inTabs);
   for (const a of $$('[data-view]')) a.setAttribute('aria-current', a.classList.contains('active') ? 'page' : 'false');
   const counts = { library: state.books.length, highlights: state.annotations.length, bookmarks: state.bookmarks.length, collections: state.collections.length, notes: state.notes.length };
   for (const el of $$('[data-count]')) el.textContent = counts[el.dataset.count] || '';
@@ -458,6 +463,105 @@ async function addBooksToCollection(c) {
     const has = b.collections?.includes(c.id);
     if (sel.has(b.id) && !has) await setBookCollections(b, [...(b.collections || []), c.id]);
     else if (!sel.has(b.id) && has) await setBookCollections(b, b.collections.filter((x) => x !== c.id));
+  }
+}
+
+// ---------------- FREE BOOKS ----------------
+const free = { q: '', lang: 'en' };
+
+VIEWS.free = (page) => {
+  page.append(pageHead('Free books', 'Classics from Project Gutenberg: free, legal and yours to keep. Added books work offline like any other.'));
+  let framed = false; try { framed = window.self !== window.top; } catch { framed = true; }
+  if (framed) {
+    page.append(emptyState('Free books live in the phone app', 'This preview inside Claude can’t reach Project Gutenberg. Open the installed app to browse and add free books with one tap.', h('a.btn.btn-primary', { href: 'https://lionolazycat-jom.github.io/marginalia-reader/#free', target: '_blank', rel: 'noopener' }, 'Open the app')));
+    return;
+  }
+  const q = h('input#free-q.search-input', { type: 'search', placeholder: 'Search 75,000 free books by title or author', value: free.q, 'aria-label': 'Search free books', enterkeyhint: 'search' });
+  const run = () => { free.q = q.value.trim(); rerender(); };
+  q.addEventListener('search', () => { if (!q.value && free.q) run(); });
+  const lang = h('select#free-lang', { 'aria-label': 'Language' }, LANGUAGES.map(([v, l]) => h('option', { value: v, selected: free.lang === v }, l)));
+  lang.addEventListener('change', () => { free.lang = lang.value; if (free.q) rerender(); });
+  page.append(h('form.lib-tools', { onsubmit: (e) => { e.preventDefault(); q.blur(); run(); } }, h('div.search-wrap', icon('search', 18), q), h('div.lib-tools-right', lang, h('button.btn.btn-primary', { type: 'submit' }, 'Search'))));
+  if (!navigator.onLine) page.append(h('p.hint', 'You’re offline. You can browse the shelves; adding a book needs a connection.'));
+
+  if (free.q) {
+    const box = h('section.free-results');
+    page.append(box);
+    box.append(h('div.shelf-head', h('h2', `Results for “${free.q}”`), h('button.link', { type: 'button', onclick: () => { free.q = ''; rerender(); } }, 'Back to shelves')));
+    const note = h('div');
+    const grid = h('div.book-grid.free-grid');
+    const more = h('div.row.center');
+    box.append(note, grid, more);
+    const load = async (pg) => {
+      more.textContent = '';
+      more.append(h('div.spinner.small'));
+      const r = await searchFree({ q: free.q, lang: free.lang, page: pg });
+      if (r.unavailable) note.replaceChildren(h('p.hint', 'The full Gutenberg catalogue isn’t answering right now, so these results come from the shelves below. Try again later for everything.'));
+      else if (r.offline) note.replaceChildren(h('p.hint', 'Showing results saved from earlier.'));
+      if (pg === 1 && !r.books.length) grid.replaceWith(h('p.empty-note', `No free books found for “${free.q}”. Try the author’s surname or fewer words.`));
+      for (const b of r.books) grid.append(freeCard(b));
+      more.textContent = '';
+      if (r.next) more.append(h('button.btn', { type: 'button', onclick: () => load(r.next) }, 'Show more'));
+    };
+    load(1);
+    return;
+  }
+  for (const sh of SHELVES) {
+    page.append(h('section.shelf', h('div.shelf-head', h('h2', sh.label)), h('div.shelf-row', sh.books.map((b) => freeCard(b, true)))));
+  }
+  page.append(h('p.hint.free-foot', 'Books come from Project Gutenberg, the oldest free digital library. They’re free because their copyright has expired in the United States; check your own country’s rules before sharing them.'));
+};
+
+const ownedFree = (id) => state.books.find((b) => b.source === `gutenberg:${id}`);
+
+function freeCover(b, cls = '') {
+  const fake = { title: b.title, author: b.author, format: 'epub', hasCover: false, id: 'g' + b.id };
+  const el = coverEl(fake, cls);
+  if (b.cover) { const img = h('img', { src: b.cover, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }); img.onload = () => el.classList.add('has-img'); img.onerror = () => img.remove(); el.append(img); }
+  return el;
+}
+
+function freeCard(b, compact) {
+  const owned = ownedFree(b.id);
+  return h(compact ? 'button.shelf-book' : 'button.free-card', { type: 'button', onclick: () => freeDetail(b), title: b.title },
+    freeCover(b),
+    owned ? h('span.badge.free-owned', 'In library') : null,
+    h('span.shelf-title', b.title), h('span.shelf-meta', b.author || 'Unknown author'));
+}
+
+async function freeDetail(b) {
+  const owned = ownedFree(b.id);
+  const body = h('div.free-detail',
+    freeCover(b, 'free-detail-cover'),
+    h('div',
+      b.author ? h('p.free-author', b.author) : null,
+      b.downloads ? h('p.muted', `${b.downloads.toLocaleString()} downloads in the last month · ${b.languages.map((l) => LANGUAGES.find(([v]) => v === l)?.[1] || l).join(', ')}`) : h('p.muted', 'Project Gutenberg · EPUB'),
+      b.summary ? h('p.free-summary', b.summary.length > 420 ? b.summary.slice(0, 420).replace(/\s\S*$/, '') + '…' : b.summary) : null,
+      b.subjects.length ? h('div.chips', b.subjects.slice(0, 5).map((s) => h('span.chip.static', s))) : null,
+      h('a.link.small', { href: gutenbergPage(b.id), target: '_blank', rel: 'noopener noreferrer' }, 'View on Project Gutenberg')));
+  const r = await dialog({ title: b.title, body, wide: true, actions: [{ label: 'Close', value: false }, owned ? { label: 'Open book', value: 'open', primary: true } : { label: 'Add to library', value: 'add', primary: true }] });
+  if (r === 'open') { openBook(owned); return; }
+  if (r !== 'add') return;
+  const busy = h('div.import-progress', { role: 'status' }, h('div.spinner.small'), h('span', `Downloading ${b.title}…`));
+  document.body.append(busy);
+  try {
+    const file = await downloadBook(b, (f) => { if (f != null) busy.lastChild.textContent = `Downloading ${b.title}… ${Math.round(f * 100)}%`; });
+    busy.lastChild.textContent = `Adding ${b.title}…`;
+    const res = await importFile(file);
+    const norm = (x) => (x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').slice(0, 2).join(' ');
+    if (norm(res.book.title) && norm(b.title) && !norm(res.book.title).includes(norm(b.title).split(' ')[0]) && !norm(b.title).includes(norm(res.book.title).split(' ')[0])) {
+      toast(`Note: Project Gutenberg sent “${res.book.title}”.`, { ms: 7000 });
+    }
+    const patch = { source: `gutenberg:${b.id}` };
+    if (b.author && !res.book.author) patch.author = b.author;
+    await updateBook(res.book, patch);
+    busy.remove();
+    toast(res.duplicate ? `“${res.book.title}” is already in your library` : `Added “${res.book.title}”`, { action: { label: 'Open', run: () => openBook(res.book) } });
+    if (view === 'free') rerender();
+  } catch (e) {
+    busy.remove();
+    dialog({ title: 'The book couldn’t be added', body: h('div', h('p', e.message), h('p.hint', 'You can also download it from Project Gutenberg in your browser, then add it here with Add books.')), actions: [{ label: 'Close', value: false }, { label: 'Open Gutenberg page', value: 'pg', primary: true }] })
+      .then((v) => { if (v === 'pg') { const a = h('a', { href: gutenbergPage(b.id), target: '_blank', rel: 'noopener noreferrer' }); document.body.append(a); a.click(); a.remove(); } });
   }
 }
 

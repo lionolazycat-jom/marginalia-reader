@@ -1,5 +1,5 @@
 // Marginalia service worker: the whole app is cached on install, so it opens and reads offline.
-const VERSION = "028bd86c4e";
+const VERSION = "e2d4e9044b";
 const APP_CACHE = `marginalia-app-${VERSION}`;
 const FONT_CACHE = 'marginalia-fonts-v1';
 const PRECACHE = [
@@ -17,6 +17,7 @@ const PRECACHE = [
  "./js/exporter.js",
  "./js/flow.js",
  "./js/formats.js",
+ "./js/freebooks.js",
  "./js/pdfcore.js",
  "./js/pdfreflow.js",
  "./js/pdfview.js",
@@ -72,6 +73,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     e.respondWith(staleWhileRevalidate(req, FONT_CACHE));
+    return;
+  }
+  if ((url.hostname === 'www.gutenberg.org' || url.hostname === 'aleph.gutenberg.org') && /\.cover\.(small|medium)\.jpg$/.test(url.pathname)) {
+    e.respondWith(staleWhileRevalidate(req, 'marginalia-covers-v1'));
     return;
   }
   if (url.origin !== self.location.origin) return;
