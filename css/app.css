@@ -992,3 +992,18 @@ body.is-reading .app { visibility: hidden; }
 /* Book / Original switch: always visible in the top bar for PDFs */
 .rd-top .rd-btn.rd-viewtoggle:not([hidden]) { display: inline-flex !important; width: auto; padding: 0 12px; gap: 6px; }
 .rd-top .rd-btn.rd-viewtoggle .rd-lbl { display: inline !important; font: 600 13px/1 var(--ui, system-ui); }
+
+/* Two-page spread: whole pages on a desk; scrolls when zoomed in past the screen */
+.flow-viewport.is-spread .flow-frame, .flow-sheet { will-change: auto; }
+.flow-viewport.is-zoomed { overflow: auto; touch-action: pan-x pan-y; overscroll-behavior: contain; }
+.flow-spacer { position: absolute; left: 0; top: 0; pointer-events: none; visibility: hidden; }
+.flow-sheet-no { font-size: 9px; }
+.rd-zoomlbl { min-width: 52px; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) {
+  .rd-textrow .rd-pill { padding: 0 9px; }
+  .rd-textrow .rd-zoom { width: 36px; padding: 0; gap: 0; }
+  .rd-textrow .rd-zoom .rd-minus { font-size: 12px; margin-left: -1px; }
+  .rd-textrow .rd-zoomlbl { min-width: 48px; padding: 0 6px; }
+}
+.rd-textrow .rd-btn.rd-display { width: auto; }
+@media (max-width: 520px) { .rd-textrow .rd-btn.rd-display { width: 36px; } }

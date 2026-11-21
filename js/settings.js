@@ -71,6 +71,7 @@ export const DEFAULT_READING = {
   hyphenate: true,
   pageAnim: 'curl',
   zoom: 'auto',
+  spreadZoom: 1,
   letterSpacing: 0,
   pdfLayout: 'scroll',
   pdfTint: true,

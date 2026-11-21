@@ -58,13 +58,34 @@ export class FlowEngine {
     }, { passive: false });
     bindPenDrag(this.viewport, () => this.mode === 'paged' && !!this.opts.penOn?.());
     // Swipe page turns (touch). Long-press selection is left to the browser.
-    let sx = 0, sy = 0, st = 0, tracking = false;
+    let sx = 0, sy = 0, st = 0, tracking = false, pinch = null;
+    const spread = () => this.viewport.classList.contains('is-spread');
     this.viewport.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2 && spread()) {
+        const [a, b] = e.touches;
+        pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), r: 1 };
+        tracking = false; return;
+      }
       if (e.touches.length !== 1) { tracking = false; return; }
       tracking = true; sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
     }, { passive: true });
+    this.viewport.addEventListener('touchmove', (e) => {
+      if (!pinch || e.touches.length !== 2) return;
+      e.preventDefault();
+      const [a, b] = e.touches;
+      pinch.r = clamp(Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinch.d, 0.3, 4);
+      for (const el of [this.frame, ...(this.sheets || [])]) { el.style.transformOrigin = `${this.viewport.clientWidth / 2 + this.viewport.scrollLeft - (parseFloat(el.style.left) || 0)}px ${this.viewport.clientHeight / 2 + this.viewport.scrollTop - (parseFloat(el.style.top) || 0)}px`; el.style.transform = `scale(${pinch.r})`; }
+    }, { passive: false });
     this.viewport.addEventListener('touchend', (e) => {
+      if (pinch) {
+        if (e.touches.length >= 2) return;
+        const r = pinch.r; pinch = null; this.swiped = Date.now();
+        for (const el of [this.frame, ...(this.sheets || [])]) el.style.transform = '';
+        if (Math.abs(r - 1) > 0.04) this.setSpreadZoom((this.settings.spreadZoom || 1) * r);
+        return;
+      }
       if (!tracking || this.mode !== 'paged') return;
+      if (this.viewport.classList.contains('is-zoomed')) { tracking = false; return; }   // zoomed in: one finger pans
       tracking = false;
       const t = e.changedTouches[0];
       const dx = t.clientX - sx, dy = t.clientY - sy;
@@ -137,12 +158,19 @@ export class FlowEngine {
       else if (s.spread === 'auto') n = vw > vh * 1.05 && vw >= 560 ? 2 : 1;   // any screen held sideways gets two pages
     }
     if (n === 2) {
-      // Two pages are drawn as two paper sheets side by side, like a printed spread.
-      const pad = vw < 600 ? 12 : 26, om = vw < 600 ? 6 : 16, sg = vw < 600 ? 8 : 14;
-      const colW = Math.max(120, Math.min(measure, (vw - 2 * om - sg - 4 * pad) / 2));
-      const gap = 2 * pad + sg, width = Math.round(2 * colW + gap);
-      const top = Math.max(s.vMargin, 36), bottom = top;
-      return { vw, vh, n, gap, width, height: Math.max(160, vh - top - bottom), top, left: Math.round((vw - width) / 2), pad, sg, sheets: true };
+      // Two pages are laid out like a printed spread: two whole sheets with real page proportions,
+      // both fully on screen, shrunk to fit (like the Original view). The zoom setting scales the spread.
+      const om = vw < 600 ? 10 : 22, sg = vw < 600 ? 8 : 16, ratio = 1.5;
+      const PAGE_W = 560;                                  // design width of one page, before scaling
+      const fitW = Math.max(80, Math.min((vw - 2 * om - sg) / 2, (vh - 2 * om) / ratio));
+      const z = clamp(+s.spreadZoom || 1, 0.5, 2.5);
+      const W = Math.round(fitW * z), H = Math.round(W * ratio), k = W / PAGE_W;
+      const pad = Math.round(44 * k), padT = Math.round(52 * k), padB = Math.round(66 * k);
+      const colW = W - 2 * pad, gap = 2 * pad + sg, width = 2 * colW + gap;
+      const spreadW = 2 * W + sg;
+      const sx = Math.max(om, Math.round((vw - spreadW) / 2)), sy = Math.max(om, Math.round((vh - H) / 2));
+      return { vw, vh, n, gap, width, height: H - padT - padB, top: sy + padT, left: sx + pad, pad, padT, padB, sg, sheets: true, W, H, k, sx, sy, z,
+        fontPx: Math.max(3, s.fontSize * k), scrollW: sx * 2 + spreadW, scrollH: sy * 2 + H };
     }
     const gap = n === 2 ? Math.max(48, margin * 1.5) : margin * 2;
     const width = this.mode === 'scroll' ? Math.min(avail, measure) : Math.min(avail, n * measure + (n - 1) * gap);
@@ -159,6 +187,7 @@ export class FlowEngine {
       const colW = (g.width - (g.n - 1) * g.gap) / g.n;
       c.width = g.width + 'px';
       c.height = g.height + 'px';
+      c.fontSize = g.sheets ? g.fontPx + 'px' : '';
       c.columnWidth = colW + 'px';
       c.columnGap = g.gap + 'px';
       c.padding = '0';
@@ -167,6 +196,7 @@ export class FlowEngine {
       this.viewport.style.setProperty('--col-w', colW + 'px');
       this.layoutSheets(g, colW);
     } else {
+      c.fontSize = '';
       this.layoutSheets(null);
       f.left = '0'; f.width = '100%'; f.top = '0'; f.height = '100%';
       c.width = g.width + 'px';
@@ -178,23 +208,34 @@ export class FlowEngine {
     }
   }
 
-  layoutSheets(g, colW) {
+  layoutSheets(g) {
     const on = !!(g && g.sheets);
     this.viewport.classList.toggle('is-spread', on);
-    if (!on) { this.sheets?.forEach((x) => x.remove()); this.sheets = null; return; }
+    this.viewport.classList.toggle('is-zoomed', on && (g.scrollW > g.vw + 1 || g.scrollH > g.vh + 1));
+    if (!on) { this.sheets?.forEach((x) => x.remove()); this.sheets = null; this.spacer?.remove(); this.spacer = null; return; }
     if (!this.sheets) {
       this.sheets = [0, 1].map(() => h('div.flow-sheet', { 'aria-hidden': 'true' }, h('span.flow-sheet-no')));
-      this.viewport.prepend(...this.sheets);
+      this.spacer = h('div.flow-spacer', { 'aria-hidden': 'true' });
+      this.viewport.prepend(this.spacer, ...this.sheets);
     }
-    const sTop = Math.max(6, g.top - 30), sH = g.vh - sTop * 1;
-    const w = colW + 2 * g.pad;
+    this.spacer.style.width = g.scrollW + 'px'; this.spacer.style.height = g.scrollH + 'px';
     this.sheets.forEach((el, i) => {
       const st = el.style;
-      st.left = Math.round(g.left + i * (colW + g.gap) - g.pad) + 'px';
-      st.width = Math.round(w) + 'px';
-      st.top = sTop + 'px';
-      st.height = Math.max(160, g.vh - sTop - Math.max(6, g.top - 30)) + 'px';
+      st.left = g.sx + i * (g.W + g.sg) + 'px';
+      st.top = g.sy + 'px';
+      st.width = g.W + 'px';
+      st.height = g.H + 'px';
+      el.firstChild.style.fontSize = Math.max(8, 13 * g.k * 1.6) + 'px';
+      el.firstChild.style.bottom = Math.round(g.padB * 0.38) + 'px';
     });
+  }
+
+  /** Zoom the two-page spread (1 = both pages fit the screen). */
+  setSpreadZoom(z) {
+    z = clamp(Math.round(z * 100) / 100, 0.5, 2.5);
+    if (Math.abs(z - (this.settings.spreadZoom || 1)) < 0.005) return z;
+    this.opts.onSpreadZoom?.(z);
+    return z;
   }
 
   relayout(loc) {
@@ -616,8 +657,9 @@ export class FlowEngine {
     const g = this.geo, s = this.settings;
     if (!g) return 1500;
     const colW = (g.width - (g.n - 1) * g.gap) / g.n;
-    const cpl = colW / (s.fontSize * 0.47);
-    const lines = g.height / (s.fontSize * s.lineHeight);
+    const fs = g.fontPx || s.fontSize;
+    const cpl = colW / (fs * 0.47);
+    const lines = g.height / (fs * s.lineHeight);
     return Math.max(150, cpl * lines * g.n * 0.85);
   }
 

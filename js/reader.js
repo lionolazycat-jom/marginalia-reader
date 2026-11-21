@@ -50,6 +50,9 @@ class Reader {
     b.textContent = two ? '2 pages' : '1 page';
     b.classList.toggle('on', !!two);
     b.setAttribute('aria-label', two ? 'Two pages. Switch to one page' : 'One page. Switch to two pages');
+    const sz = !this.isPdf && two;
+    for (const x of [this.zoomOutBtn, this.zoomLbl, this.zoomInBtn]) if (x) x.hidden = !sz;
+    if (this.zoomLbl) this.zoomLbl.textContent = Math.round((this.settings.spreadZoom || 1) * 100) + '%';
   }
   updateViewBtn() {
     this.updateTextRow();
@@ -274,6 +277,7 @@ class Reader {
       onLink: (t, el) => this.onLink(t, el),
       onToc: () => this.refreshToc(),
       onZoomRequest: (z) => this.setSetting('zoom', z),
+      onSpreadZoom: (z) => this.setSetting('spreadZoom', z),
       onZoom: () => this.updateZoomLabel(),
       onEnd: () => this.onReachEnd(),
     };
@@ -306,7 +310,11 @@ class Reader {
     this.sizeDownBtn = h('button.rd-pill.rd-size', { type: 'button', 'aria-label': 'Smaller text', title: 'Smaller text (-)', onclick: () => this.bumpSize(-1) }, h('span', { style: { fontSize: '13px' } }, 'A'), h('span.rd-minus', '\u2212'));
     this.sizeUpBtn = h('button.rd-pill.rd-size', { type: 'button', 'aria-label': 'Larger text', title: 'Larger text (+)', onclick: () => this.bumpSize(1) }, h('span', { style: { fontSize: '20px' } }, 'A'), h('span.rd-minus', '+'));
     this.spreadBtn = h('button.rd-pill.rd-spread', { type: 'button', onclick: () => this.toggleSpread() });
-    this.textRow = h('div.rd-textrow', { role: 'toolbar', 'aria-label': 'Text and view' }, this.sizeDownBtn, this.sizeUpBtn, this.spreadBtn, this.displayBtn);
+    const zoomBy = (f) => this.engine?.setSpreadZoom?.((this.settings.spreadZoom || 1) * f);
+    this.zoomOutBtn = h('button.rd-pill.rd-zoom', { type: 'button', 'aria-label': 'Zoom out', title: 'Zoom out', onclick: () => zoomBy(1 / 1.25) }, icon('search', 15), h('span.rd-minus', '\u2212'));
+    this.zoomLbl = h('button.rd-pill.rd-zoomlbl', { type: 'button', 'aria-label': 'Fit both pages to the screen', title: 'Fit both pages', onclick: () => this.engine?.setSpreadZoom?.(1) }, '100%');
+    this.zoomInBtn = h('button.rd-pill.rd-zoom', { type: 'button', 'aria-label': 'Zoom in', title: 'Zoom in', onclick: () => zoomBy(1.25) }, icon('search', 15), h('span.rd-minus', '+'));
+    this.textRow = h('div.rd-textrow', { role: 'toolbar', 'aria-label': 'Text and view' }, this.sizeDownBtn, this.sizeUpBtn, this.spreadBtn, this.zoomOutBtn, this.zoomLbl, this.zoomInBtn, this.displayBtn);
     this.toolsEl = h('div.rd-tools', this.viewBtn, ...Object.values(this.tools).slice(0, 6), this.bookmarkBtn, this.captureBtn, this.fsBtn, this.moreBtn);
     this.top = h('header.rd-top', { role: 'toolbar', 'aria-label': 'Reading tools' },
       iconBtn('back', 'Back to library', () => this.close(), { class: 'rd-btn rd-back' }),
