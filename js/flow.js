@@ -449,6 +449,15 @@ export class FlowEngine {
     ctx.scale(scale, scale);
     ctx.fillStyle = opaqueBg(this.viewport);
     ctx.fillRect(0, 0, W, H);
+    if (this.sheets && this.viewport.classList.contains('is-spread')) {
+      this.sheets.forEach((sh) => {
+        const r = sh.getBoundingClientRect(), x = r.left - vr.left, y = r.top - vr.top;
+        ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+        ctx.fillStyle = getComputedStyle(sh).backgroundColor; ctx.fillRect(x, y, r.width, r.height); ctx.restore();
+        const no = sh.firstChild?.textContent;
+        if (no) { ctx.fillStyle = getComputedStyle(sh.firstChild).color; ctx.font = '500 11px system-ui, sans-serif'; ctx.textAlign = 'center'; if ('letterSpacing' in ctx) ctx.letterSpacing = '0px'; ctx.fillText(no, x + r.width / 2, y + r.height - 9); ctx.textAlign = 'start'; }
+      });
+    }
     const seen = (r) => r.right > vr.left && r.left < vr.right && r.bottom > vr.top && r.top < vr.bottom && r.width > 0;
     for (const hl of this.content.querySelectorAll('.hl')) {
       const bg = getComputedStyle(hl).backgroundColor;

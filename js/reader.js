@@ -38,7 +38,21 @@ class Reader {
   get settings() { return { ...state.reading, ...(this.book.settings || {}) }; }
   get isPdf() { return this.engine ? this.engine.kind === 'pdf' : this.book.format === 'pdf' && this.view !== 'book'; }
   get isPdfBook() { return this.book.format === 'pdf'; }
+  toggleSpread() {
+    if (this.isPdf) this.setSetting('pdfLayout', this.settings.pdfLayout === 'double' ? 'single' : 'double');
+    else this.setSetting('spread', this.engine?.geo?.n === 2 ? 'single' : 'double');
+  }
+  updateTextRow() {
+    const b = this.spreadBtn; if (!b || !this.engine) return;
+    const paged = this.isPdf ? true : this.engine.mode === 'paged' && !this.book?.comic;
+    b.hidden = !paged;
+    const two = this.isPdf ? this.settings.pdfLayout === 'double' : this.engine.geo?.n === 2;
+    b.textContent = two ? '2 pages' : '1 page';
+    b.classList.toggle('on', !!two);
+    b.setAttribute('aria-label', two ? 'Two pages. Switch to one page' : 'One page. Switch to two pages');
+  }
   updateViewBtn() {
+    this.updateTextRow();
     if (!this.viewBtn) return;
     this.viewBtn.hidden = !this.canBookView;
     const book = this.view === 'book';
@@ -289,7 +303,11 @@ class Reader {
     this.captureBtn = tb('capture', 'camera', 'Save this page as an image (C)', () => this.capturePage());
     this.fsBtn = tb('fullscreen', 'fullscreen', 'Full screen (F)', () => this.toggleFullscreen());
     this.moreBtn = iconBtn('more', 'More options', (e) => this.moreMenu(e.currentTarget), { class: 'rd-btn rd-more' });
-    this.toolsEl = h('div.rd-tools', ...Object.values(this.tools).slice(0, 6), this.viewBtn, this.displayBtn, this.bookmarkBtn, this.captureBtn, this.fsBtn, this.moreBtn);
+    this.sizeDownBtn = h('button.rd-pill.rd-size', { type: 'button', 'aria-label': 'Smaller text', title: 'Smaller text (-)', onclick: () => this.bumpSize(-1) }, h('span', { style: { fontSize: '13px' } }, 'A'), h('span.rd-minus', '\u2212'));
+    this.sizeUpBtn = h('button.rd-pill.rd-size', { type: 'button', 'aria-label': 'Larger text', title: 'Larger text (+)', onclick: () => this.bumpSize(1) }, h('span', { style: { fontSize: '20px' } }, 'A'), h('span.rd-minus', '+'));
+    this.spreadBtn = h('button.rd-pill.rd-spread', { type: 'button', onclick: () => this.toggleSpread() });
+    this.textRow = h('div.rd-textrow', { role: 'toolbar', 'aria-label': 'Text and view' }, this.sizeDownBtn, this.sizeUpBtn, this.viewBtn, this.spreadBtn, this.displayBtn);
+    this.toolsEl = h('div.rd-tools', ...Object.values(this.tools).slice(0, 6), this.bookmarkBtn, this.captureBtn, this.fsBtn, this.moreBtn);
     this.top = h('header.rd-top', { role: 'toolbar', 'aria-label': 'Reading tools' },
       iconBtn('back', 'Back to library', () => this.close(), { class: 'rd-btn rd-back' }),
       this.titleEl,
@@ -301,10 +319,8 @@ class Reader {
       const order = ['toc', 'search', 'pen', 'annotations', 'tts', 'sounds', 'bookmark'].map((k) => this.tools[k]).filter(Boolean);
       if (mq.matches) order.forEach((el) => this.dock.append(el));
       else {
-        for (const el of order) {
-          if (el === this.bookmarkBtn) this.toolsEl.insertBefore(el, this.fsBtn || this.moreBtn);
-          else this.toolsEl.insertBefore(el, this.viewBtn || this.displayBtn || this.bookmarkBtn || this.fsBtn || this.moreBtn);
-        }
+        const anchor = [this.captureBtn, this.fsBtn, this.moreBtn].find((x) => x && x.parentNode === this.toolsEl) || null;
+        for (const el of order) this.toolsEl.insertBefore(el, anchor);
       }
     };
     place();
@@ -318,6 +334,7 @@ class Reader {
     this.leftLabel = h('span.rd-left', '');
     this.pctLabel = h('span.rd-pct', '');
     this.bottom = h('footer.rd-bottom',
+      this.textRow,
       this.dock,
       iconBtn('chevronL', 'Previous page', () => this.engine?.prev(), { class: 'rd-btn rd-prev' }),
       h('div.rd-progress', h('div.rd-slider-wrap', this.slider, this.sliderTip), h('div.rd-meta', this.posLabel, this.leftLabel, this.pctLabel)),
@@ -330,10 +347,18 @@ class Reader {
     this.runTop = h('div.rd-run.top', { 'aria-hidden': 'true' });
     this.runBottom = h('div.rd-run.bottom', { 'aria-hidden': 'true' });
     // A small arrow tab: pulls the toolbar back down when it is tucked away, and tucks it away when it is showing.
-    this.handle = h('button.rd-handle', { type: 'button', 'aria-label': 'Hide toolbar', title: 'Show / hide toolbar (M)',
-      // Remember the state at touch-down: emulated mouse moves near the top edge can re-show the bar before the click lands.
-      onpointerdown: () => { this.handleWasHidden = this.chromeHidden; },
-      onclick: (e) => { e.stopPropagation(); const wasHidden = this.handleWasHidden ?? this.chromeHidden; this.handleWasHidden = undefined; if (wasHidden) { this.showChrome(true); this.chromeHold = Date.now() + 6000; this.hideChromeSoon(6000); } else this.tuckChrome(); } }, icon("chevronD", 14));
+    this.handle = h('button.rd-handle', { type: 'button', 'aria-label': 'Hide toolbar', title: 'Pull up or down to show / hide the toolbar (M)',
+      onpointerdown: (e) => { this.handleWasHidden = this.chromeHidden; this.hy = e.clientY; this.hmoved = false; },
+      onpointerup: (e) => {
+        const dy = e.clientY - this.hy;
+        if (Math.abs(dy) > 14) { this.hmoved = true; if (dy < 0 && this.handleWasHidden) { this.showChrome(true); this.chromeHold = Date.now() + 6000; this.hideChromeSoon(6000); } else if (dy > 0 && !this.handleWasHidden) this.tuckChrome(); }
+      },
+      onclick: (e) => { e.stopPropagation(); if (this.hmoved) { this.hmoved = false; this.handleWasHidden = undefined; return; } const wasHidden = this.handleWasHidden ?? this.chromeHidden; this.handleWasHidden = undefined; if (wasHidden) { this.showChrome(true); this.chromeHold = Date.now() + 6000; this.hideChromeSoon(6000); } else this.tuckChrome(); } }, icon("chevronD", 14));
+    // Keep the pull tab riding on the top edge of the bottom bar, and let the bar itself be swiped down.
+    if (window.ResizeObserver) { const ro = new ResizeObserver(() => this.root.style.setProperty('--bh', this.bottom.offsetHeight + 'px')); ro.observe(this.bottom); this.unsubs.push(() => ro.disconnect()); }
+    let by = 0, bx = 0;
+    this.bottom.addEventListener('touchstart', (e) => { by = e.touches[0].clientY; bx = e.touches[0].clientX; }, { passive: true });
+    this.bottom.addEventListener('touchend', (e) => { const t = e.changedTouches[0]; if (t.clientY - by > 50 && Math.abs(t.clientX - bx) < 40 && !e.target.closest?.('.rd-slider-wrap')) this.tuckChrome(); }, { passive: true });
     this.root.append(this.stage, this.runTop, this.runBottom, this.ribbon, this.edgeTop, this.edgeBottom, this.top, this.bottom, this.panel, this.handle);
     for (const edge of [this.edgeTop, this.edgeBottom]) edge.addEventListener('mouseenter', () => this.showChrome());
     this.top.addEventListener('mouseenter', () => this.pinChrome = true);
@@ -423,6 +448,7 @@ class Reader {
   // ---------------- position ----------------
   onRelocate(info) {
     this.info = info;
+    this.updateTextRow();
     this.activity();
     const pct = Math.round(info.progress * 1000) / 10;
     this.slider.value = Math.round(info.progress * 1000);
@@ -575,7 +601,7 @@ class Reader {
       const z = this.engine.scale;
       this.setSetting('zoom', clamp(Math.round((z * (d > 0 ? 1.15 : 1 / 1.15)) * 100) / 100, 0.25, 6));
     } else {
-      this.setSetting('fontSize', clamp(this.settings.fontSize + d, 12, 40));
+      this.setSetting('fontSize', clamp(this.settings.fontSize + d, 8, 40));
     }
   }
 
@@ -677,6 +703,7 @@ class Reader {
   }
   setPen(color) {
     this.hlPen = color;
+    this.root.classList.toggle('pen-on', !!color);
     this.closePops();
     const b = this.penBtn;
     if (b) { b.classList.toggle('active', !!color); b.classList.toggle('has-pen', !!color); if (color) b.style.setProperty('--pen', HL_COLORS[color].css); }
@@ -1124,9 +1151,9 @@ class Reader {
       if (s.pdfLayout !== 'scroll') body.append(...turnBlock);
     } else {
       const fonts = h('div.font-list', Object.entries(FONTS).map(([k, f]) => h('button', { type: 'button', class: `font-opt ${s.font === k ? 'on' : ''}`, 'aria-pressed': s.font === k ? 'true' : 'false', dataset: { font: k }, style: { fontFamily: f.stack }, onclick: () => this.setSetting('font', k) }, h('span.font-name', f.label), h('span.font-note', f.note))));
-      const num = h('input.size-input', { type: 'number', inputmode: 'numeric', min: 12, max: 40, step: 1, value: s.fontSize, 'aria-label': 'Text size in pixels' });
-      num.addEventListener('change', () => this.setSetting('fontSize', clamp(Math.round(+num.value) || s.fontSize, 12, 40)));
-      const rng = h('input.size-range', { type: 'range', min: 12, max: 40, step: 1, value: s.fontSize, 'aria-label': 'Text size' });
+      const num = h('input.size-input', { type: 'number', inputmode: 'numeric', min: 8, max: 40, step: 1, value: s.fontSize, 'aria-label': 'Text size in pixels' });
+      num.addEventListener('change', () => this.setSetting('fontSize', clamp(Math.round(+num.value) || s.fontSize, 8, 40)));
+      const rng = h('input.size-range', { type: 'range', min: 8, max: 40, step: 1, value: s.fontSize, 'aria-label': 'Text size' });
       rng.addEventListener('input', () => { num.value = rng.value; this.setSettingLive('fontSize', +rng.value); });
       rng.addEventListener('change', () => this.setSetting('fontSize', +rng.value));
       const size = h('div.size-row',
