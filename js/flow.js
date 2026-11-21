@@ -4,6 +4,7 @@
 // into the chapter's text, so they survive font, size and layout changes.
 
 import { h, debounce, clamp, throttle } from './util.js';
+import { FONTS } from './settings.js';
 
 export class FlowEngine {
   constructor(host, book, opts) {
@@ -98,7 +99,7 @@ export class FlowEngine {
     this.settings = s;
     this.mode = s.flowLayout === 'scroll' ? 'scroll' : 'paged';
     const st = this.viewport.style;
-    st.setProperty('--rd-font', s.fontStack);
+    st.setProperty('--rd-font', (FONTS[s.font] || FONTS.literata).stack);
     st.setProperty('--rd-size', s.fontSize + 'px');
     st.setProperty('--rd-lh', s.lineHeight);
     st.setProperty('--rd-para', s.paraSpacing + 'em');

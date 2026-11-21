@@ -5,13 +5,13 @@
 
 import { pdfOutline } from './pdfcore.js';
 
-export const REFLOW_VERSION = 3;
+export const REFLOW_VERSION = 4;
 
 const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
 const median = (a) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
 
 /** onProgress(fraction). Returns {chapters:[{title, html}], toc, pageToChapter, scanned:boolean}. */
-export async function reflowPdf(doc, onProgress, signal) {
+export async function reflowPdf(doc, onProgress, signal, opts = {}) {
   const n = doc.numPages;
   const pages = [];
   for (let i = 0; i < n; i++) {
@@ -35,51 +35,11 @@ export async function reflowPdf(doc, onProgress, signal) {
   const headingSizes = [...new Set(allLines.filter((l) => l.size >= body * 1.18 && l.text.length < 140).map((l) => Math.round(l.size)))].sort((a, b) => b - a);
   const level = (size) => { const i = headingSizes.indexOf(Math.round(size)); return i < 0 ? 0 : Math.min(3, i + 1); };
 
-  // Blocks: {type:'p'|'h', level, text, page}
-  const blocks = [];
-  let para = null;
-  const flush = () => { if (para && para.text.trim()) blocks.push(para); para = null; };
-  for (let pi = 0; pi < pages.length; pi++) {
-    const { lines } = pages[pi];
-    if (!lines.length) continue;
-    const bodyLines = lines.filter((l) => Math.abs(l.size - body) < body * 0.15);
-    const left = median(bodyLines.map((l) => l.x0)) || Math.min(...lines.map((l) => l.x0));
-    const right = Math.max(...(bodyLines.length ? bodyLines : lines).map((l) => l.x1));
-    const gaps = [];
-    for (let i = 1; i < lines.length; i++) { const g = lines[i - 1].y - lines[i].y; if (g > 0 && Math.abs(lines[i].size - body) < body * 0.15) gaps.push(g); }
-    const lineGap = median(gaps) || body * 1.25;
-    for (let i = 0; i < lines.length; i++) {
-      const l = lines[i], prev = lines[i - 1];
-      const isHead = l.size >= body * 1.18 && l.text.length < 140 && !/[.,;]$/.test(l.text) ? level(l.size) || 3
-        : (l.bold && l.text.length < 90 && !/[.,;:]$/.test(l.text) && (!prev || prev.y - l.y > lineGap * 1.3) && (!lines[i + 1] || l.y - lines[i + 1].y > lineGap * 1.3) && /^[\p{Lu}\d]/u.test(l.text) ? 4 : 0);
-      if (isHead) {
-        // Multi-line headings at the same size join together.
-        if (para && para.type === 'h' && para.page === pi && Math.abs(para.size - l.size) < 0.6 && prev && prev.y - l.y < l.size * 1.9) { para.text += ' ' + l.text; continue; }
-        flush();
-        para = { type: 'h', level: isHead, text: l.text, page: pi, size: l.size };
-        continue;
-      }
-      let newPara = !para || para.type === 'h';
-      if (!newPara && prev) {
-        const gap = prev.y - l.y;
-        const prevShort = prev.x1 < right - body * 3.5;
-        const indented = l.x0 > left + body * 0.9 && l.x0 < left + body * 6;
-        const ends = /[.!?:"”’)\]…]$/.test(prev.text);
-        if (gap > lineGap * 1.45 || gap < 0) newPara = true;
-        else if (indented && (ends || prevShort)) newPara = true;
-        else if (prevShort && ends) newPara = true;
-        else if (/^([•▪◦●·\-–—*]|\d{1,2}[.)]|[a-z][.)])\s/.test(l.text)) newPara = true;
-        if (Math.abs(l.size - (para.size || body)) > body * 0.2) newPara = true;
-      }
-      if (!newPara && i === 0 && para) {
-        // Page break: continue the paragraph unless the last one clearly ended.
-        if (/[.!?"”]$/.test(para.text) && /^[\p{Lu}"“‘(\d]/u.test(l.text)) newPara = true;
-      }
-      if (newPara) { flush(); para = { type: 'p', text: l.text, page: pi, size: l.size, small: l.size < body * 0.86 }; }
-      else para.text = joinLines(para.text, l.text);
-    }
-  }
-  flush();
+  // Blocks: {type:'p'|'h', level, text, page}. Automatic mode keeps paragraphs apart using spacing and indents;
+  // if that leaves the book in tiny fragments (a sign the PDF's spacing is unusual), the text is joined more firmly.
+  let mode = opts.mode === 'join' ? 'join' : 'auto';
+  let blocks = buildBlocks(pages, body, level, mode);
+  if (mode === 'auto' && fragmented(blocks)) { mode = 'join'; blocks = buildBlocks(pages, body, level, mode); }
   onProgress?.(0.92);
 
   // Chapters: outline first, then big headings, then fixed page ranges.
@@ -132,7 +92,65 @@ export async function reflowPdf(doc, onProgress, signal) {
   // Page markers carry ids per chapter; renumber them to the final chapter index.
   chapters.forEach((c, i) => { c.html = c.html.replace(/id="c\d+-pg(\d+)"/g, `id="c${i}-pg$1"`); });
   onProgress?.(1);
-  return { chapters, toc: toc.filter((t) => chapters[t.chapter]), pageToChapter, scanned: false };
+  return { chapters, toc: toc.filter((t) => chapters[t.chapter]), pageToChapter, scanned: false, mode };
+}
+
+function buildBlocks(pages, body, level, mode) {
+  const blocks = [];
+  let para = null;
+  const flush = () => { if (para && para.text.trim()) blocks.push(para); para = null; };
+  for (let pi = 0; pi < pages.length; pi++) {
+    const { lines } = pages[pi];
+    if (!lines.length) continue;
+    const bodyLines = lines.filter((l) => Math.abs(l.size - body) < body * 0.15);
+    const left = median(bodyLines.map((l) => l.x0)) || Math.min(...lines.map((l) => l.x0));
+    const right = Math.max(...(bodyLines.length ? bodyLines : lines).map((l) => l.x1));
+    const gaps = [];
+    for (let i = 1; i < lines.length; i++) { const g = lines[i - 1].y - lines[i].y; if (g > 0 && Math.abs(lines[i].size - body) < body * 0.15) gaps.push(g); }
+    const lineGap = median(gaps) || body * 1.25;
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i], prev = lines[i - 1];
+      const isHead = l.size >= body * 1.18 && l.text.length < 140 && !/[.,;]$/.test(l.text) ? level(l.size) || 3
+        : (l.bold && l.text.length < 90 && !/[.,;:]$/.test(l.text) && (!prev || prev.y - l.y > lineGap * 1.3) && (!lines[i + 1] || l.y - lines[i + 1].y > lineGap * 1.3) && /^[\p{Lu}\d]/u.test(l.text) ? 4 : 0);
+      if (isHead) {
+        // Multi-line headings at the same size join together.
+        if (para && para.type === 'h' && para.page === pi && Math.abs(para.size - l.size) < 0.6 && prev && prev.y - l.y < l.size * 1.9) { para.text += ' ' + l.text; continue; }
+        flush();
+        para = { type: 'h', level: isHead, text: l.text, page: pi, size: l.size };
+        continue;
+      }
+      let newPara = !para || para.type === 'h';
+      if (!newPara && prev) {
+        const gap = prev.y - l.y;
+        const prevShort = prev.x1 < right - body * (mode === 'join' ? 9 : 5);
+        const indented = l.x0 > left + body * 0.9 && l.x0 < left + body * 6;
+        const ends = /[.!?:"”’)\]…]$/.test(prev.text);
+        if (gap < 0) newPara = !(prev.x1 > left && l.x0 <= left + body);     // new column or page region
+        else if (gap > lineGap * (mode === 'join' ? 1.7 : 1.35)) newPara = true;
+        else if (mode !== 'join' && indented && ends && prevShort) newPara = true;
+        else if (mode !== 'join' && prevShort && ends && gap > lineGap * 1.2) newPara = true;
+        else if (/^([•▪◦●·\-–—*]|\d{1,2}[.)]|[a-z][.)])\s/.test(l.text)) newPara = true;
+        if (Math.abs(l.size - (para.size || body)) > body * 0.25 && !(mode === 'join' && l.size < body * 1.1)) newPara = true;
+      }
+      if (!newPara && i === 0 && para) {
+        // Page break: continue the paragraph unless the last one clearly ended.
+        if (/[.!?"”]$/.test(para.text) && /^[\p{Lu}"“‘(\d]/u.test(l.text)) newPara = true;
+      }
+      if (newPara) { flush(); para = { type: 'p', text: l.text, page: pi, size: l.size, small: l.size < body * 0.86 }; }
+      else para.text = joinLines(para.text, l.text);
+    }
+  }
+  flush();
+  return blocks;
+}
+
+function fragmented(blocks) {
+  const ps = blocks.filter((b) => b.type === 'p' && !b.small);
+  if (ps.length < 24) return false;
+  const lens = ps.map((b) => b.text.length).sort((a, b) => a - b);
+  const med = lens[lens.length >> 1];
+  const tiny = lens.filter((n) => n < 90).length / lens.length;
+  return med < 150 || tiny > 0.45;
 }
 
 function joinLines(a, b) {
@@ -161,29 +179,52 @@ function toLines(tc, vp) {
     if (R && Math.abs(R.y - it.y) <= Math.min(R.size, it.size) * 0.45) R.items.push(it);
     else rows.push({ y: it.y, size: it.size, items: [it] });
   }
-  let lines = [];
-  for (const R of rows) {
-    R.items.sort((p, q) => p.x - q.x);
+  for (const R of rows) R.items.sort((p, q) => p.x - q.x);
+  const build = (items, y, splitGap) => {
+    const out = [];
     let L = null;
-    for (const it of R.items) {
+    for (const it of items) {
       const gap = L ? it.x - L.x1 : 0;
-      if (!L || gap > it.size * 2.5) {
-        L = { text: it.str, x0: it.x, x1: it.x + it.w, y: R.y, size: it.size, sizes: [it.size], bold: it.bold };
-        lines.push(L);
+      if (!L || gap > it.size * splitGap) {
+        L = { text: it.str, x0: it.x, x1: it.x + it.w, y, size: it.size, sizes: [it.size], bold: it.bold };
+        out.push(L);
       } else {
         L.text += gap > it.size * 0.18 && !/\s$/.test(L.text) && !/^\s/.test(it.str) ? ' ' + it.str : it.str;
         L.x1 = Math.max(L.x1, it.x + it.w);
         L.sizes.push(it.size); L.bold = L.bold && it.bold;
       }
     }
+    return out;
+  };
+  // Two columns: look for a vertical channel near the middle that almost no line crosses.
+  let gutter = null;
+  if (rows.length >= 14) {
+    let best = null;
+    for (let x = vp.width * 0.36; x <= vp.width * 0.64; x += 3) {
+      let cross = 0;
+      for (const R of rows) if (R.items.some((it) => it.x < x - 1 && it.x + it.w > x + 1)) cross++;
+      if (!best || cross < best.cross) best = { x, cross };
+    }
+    if (best && best.cross <= rows.length * 0.1) {
+      const both = rows.filter((R) => R.items.some((it) => it.x + it.w < best.x) && R.items.some((it) => it.x > best.x)).length;
+      if (both >= rows.length * 0.25) gutter = best.x;
+    }
   }
-  // Two-column pages: read the left column top to bottom, then the right.
-  const mid = vp.width / 2;
-  const right = lines.filter((l) => l.x0 > mid - vp.width * 0.03);
-  const leftOnly = lines.filter((l) => l.x1 < mid + vp.width * 0.03);
-  if (lines.length > 12 && right.length > lines.length * 0.3 && leftOnly.length > lines.length * 0.3) {
-    const col = (l) => (l.x0 > mid - vp.width * 0.03 ? 1 : 0);
-    lines = lines.map((l, i) => ({ l, i })).sort((a, b) => col(a.l) - col(b.l) || a.i - b.i).map((x) => x.l);
+  let lines = [];
+  if (gutter == null) {
+    // Single column: only a very wide gap (table cells, tab stops) breaks a line; justified spacing never does.
+    for (const R of rows) lines.push(...build(R.items, R.y, 4.5));
+  } else {
+    // Read each column top to bottom, with full-width lines (titles) where they fall.
+    let leftCol = [], rightCol = [];
+    const flushCols = () => { lines.push(...leftCol, ...rightCol); leftCol = []; rightCol = []; };
+    for (const R of rows) {
+      const crosses = R.items.some((it) => it.x < gutter - 1 && it.x + it.w > gutter + 1);
+      if (crosses) { flushCols(); lines.push(...build(R.items, R.y, 4.5)); continue; }
+      leftCol.push(...build(R.items.filter((it) => it.x + it.w / 2 < gutter), R.y, 4.5));
+      rightCol.push(...build(R.items.filter((it) => it.x + it.w / 2 >= gutter), R.y, 4.5));
+    }
+    flushCols();
   }
   for (const l of lines) { l.size = median(l.sizes); l.text = l.text.replace(/\s+/g, ' ').trim(); l.top = vp.height - l.y; }
   return lines.filter((l) => l.text);

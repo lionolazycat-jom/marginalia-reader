@@ -160,14 +160,14 @@ class Reader {
   async bookViewContent(doc) {
     let cached = null;
     try { cached = await db.get('reflow', this.book.id); } catch {}
-    let data = cached && cached.version === REFLOW_VERSION ? cached.data : null;
+    let data = cached && cached.version === REFLOW_VERSION && (cached.req || 'auto') === (this.book.reflowMode || 'auto') ? cached.data : null;
     if (!data) {
       const label = this.stage.querySelector('.rd-loading p');
       const bar = h('div.pbar.rd-load-bar', h('span', { style: { width: '0%' } }));
       this.stage.querySelector('.rd-loading')?.append(bar);
       if (label) label.textContent = 'Turning the PDF into a book…';
-      data = await reflowPdf(doc, (f) => { bar.firstChild.style.width = Math.round(f * 100) + '%'; });
-      try { await db.put('reflow', { id: this.book.id, version: REFLOW_VERSION, data }); } catch {}
+      data = await reflowPdf(doc, (f) => { bar.firstChild.style.width = Math.round(f * 100) + '%'; }, undefined, { mode: this.book.reflowMode });
+      try { await db.put('reflow', { id: this.book.id, version: REFLOW_VERSION, req: this.book.reflowMode || 'auto', data }); } catch {}
     }
     if (data.scanned) return null;
     this.pageToChapter = data.pageToChapter;
@@ -199,6 +199,16 @@ class Reader {
       else break;
     }
     return page;
+  }
+
+  /** Rebuild the Book view text; 'join' mode glues lines into long paragraphs for PDFs with odd spacing. */
+  async rebuildBookView() {
+    const mode = this.book.reflowMode === 'join' ? 'auto' : 'join';
+    const pg = this.info ? this.flowLocToPage(this.info.loc) : null;
+    this.saveProgressNow();
+    try { await db.del('reflow', this.book.id); } catch {}
+    await updateBook(this.book, { reflowMode: mode });
+    openReader(this.book, { view: 'book', pageForBook: pg });
   }
 
   async switchView(v) {
@@ -274,7 +284,9 @@ class Reader {
     this.edgeBottom = h('div.rd-edge.bottom');
     this.runTop = h('div.rd-run.top', { 'aria-hidden': 'true' });
     this.runBottom = h('div.rd-run.bottom', { 'aria-hidden': 'true' });
-    this.root.append(this.stage, this.runTop, this.runBottom, this.ribbon, this.edgeTop, this.edgeBottom, this.top, this.bottom, this.panel);
+    // A small arrow tab: pulls the toolbar back down when it is tucked away, and tucks it away when it is showing.
+    this.handle = h('button.rd-handle', { type: 'button', 'aria-label': 'Show toolbar', title: 'Show / hide toolbar (M)', onclick: (e) => { e.stopPropagation(); this.chromeHidden ? (this.showChrome(true), this.hideChromeSoon(6000)) : this.tuckChrome(); } }, icon("chevronD", 14));
+    this.root.append(this.stage, this.runTop, this.runBottom, this.ribbon, this.edgeTop, this.edgeBottom, this.top, this.bottom, this.panel, this.handle);
     for (const edge of [this.edgeTop, this.edgeBottom]) edge.addEventListener('mouseenter', () => this.showChrome());
     this.top.addEventListener('mouseenter', () => this.pinChrome = true);
     this.top.addEventListener('mouseleave', () => { this.pinChrome = false; this.hideChromeSoon(); });
@@ -301,6 +313,7 @@ class Reader {
     if (this.chromeHidden === false && !force) return;
     this.root.classList.remove('chrome-hidden');
     this.chromeHidden = false;
+    this.handle?.setAttribute('aria-label', 'Hide toolbar');
   }
   hideChrome() {
     if (this.pinChrome || this.panelOpen || this.tts?.active || !state.ui.toolbarAutoHide) return;
@@ -311,7 +324,8 @@ class Reader {
     clearTimeout(this.chromeT);
     this.chromeT = setTimeout(() => this.hideChrome(), ms);
   }
-  toggleChrome() { this.chromeHidden ? (this.showChrome(), this.hideChromeSoon(5000)) : (this.root.classList.add('chrome-hidden'), this.chromeHidden = true); }
+  tuckChrome() { this.root.classList.add('chrome-hidden'); this.chromeHidden = true; this.handle?.setAttribute('aria-label', 'Show toolbar'); }
+  toggleChrome() { this.chromeHidden ? (this.showChrome(true), this.hideChromeSoon(5000)) : this.tuckChrome(); }
 
   onTap(zone) {
     this.activity();
@@ -985,7 +999,8 @@ class Reader {
     if (this.isPdfBook) {
       const vs = h('div.seg.view-seg', { role: 'group', 'aria-label': 'PDF view' }, [['book', 'Book view', 'book'], ['original', 'Original pages', 'copy']].map(([v, l, ic]) =>
         h('button', { type: 'button', class: this.view === v ? 'on' : '', 'aria-pressed': this.view === v ? 'true' : 'false', onclick: () => this.switchView(v) }, icon(ic, 16), h('span', l))));
-      body.append(sec('PDF view', vs, h('p.hint', this.view === 'book' ? 'The PDF’s text, rebuilt as a book you can restyle. Pictures and tables stay in Original pages.' : 'Switch to Book view to choose the font, size and spacing.')));
+      const fix = this.view === 'book' ? h('button.btn.btn-block.ghost', { type: 'button', onclick: () => this.rebuildBookView() }, this.book.reflowMode === 'join' ? 'Rebuild with automatic paragraphs' : 'Fix broken lines and paragraphs') : null;
+      body.append(sec('PDF view', vs, h('p.hint', this.view === 'book' ? 'The PDF’s text, rebuilt as a book you can restyle. Pictures and tables stay in Original pages.' : 'Switch to Book view to choose the font, size and spacing.'), fix));
     }
     body.append(sec('Theme', themes));
     if (s.theme === 'custom') {

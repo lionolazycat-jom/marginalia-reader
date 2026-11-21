@@ -230,6 +230,8 @@ const P = {
   check: 'M5 12.5 10 17 19 7',
   chevronL: 'M15 18l-6-6 6-6',
   chevronR: 'M9 6l6 6-6 6',
+  chevronD: 'M6 9l6 6 6-6',
+  chevronU: 'M6 15l6-6 6 6',
   zoomIn: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 11h6M11 8v6',
   zoomOut: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 11h6',
   underline: 'M7 4v7a5 5 0 0 0 10 0V4M5 20h14',

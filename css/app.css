@@ -855,3 +855,11 @@ body.is-reading .app { visibility: hidden; }
 .check-chip:has(input:checked) { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .check-chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dialog-actions { order: 10; }
+
+/* Arrow tab to bring the toolbar back (or tuck it away) */
+.rd-handle { position: absolute; z-index: 7; top: calc(56px + var(--safe-t)); left: 50%; width: 44px; height: 17px; margin-left: -22px; padding: 0; border: 1px solid var(--rd-line); border-top: 0; border-radius: 0 0 12px 12px; background: var(--rd-chrome); color: var(--rd-muted); display: grid; place-items: center; cursor: pointer; opacity: .85; transition: top .25s cubic-bezier(.2,.7,.2,1), opacity .2s, transform .25s; -webkit-tap-highlight-color: transparent; }
+.rd-handle svg { transition: transform .25s; transform: rotate(180deg); }
+.rd-handle:hover, .rd-handle:focus-visible { opacity: 1; color: var(--rd-fg); }
+.reader.chrome-hidden .rd-handle { top: 0; opacity: .8; }
+.reader.chrome-hidden .rd-handle svg { transform: none; }
+.reader.chrome-hidden .rd-handle:hover { opacity: 1; }
