@@ -29,7 +29,7 @@ const CURATED = SHELVES.flatMap((s) => s.books.map((b) => ({ ...b, shelf: s.key 
 /** Categories: live catalogue topics, with keyword search and bundled shelves as fallbacks. */
 export const CATEGORIES = [
   { key: 'literature', label: 'Literature', topic: 'literature', query: 'fiction', shelves: ['start', 'love', 'big'] },
-  { key: 'women', label: 'Women', topic: 'women', query: 'women', shelves: ['women', 'myth'] },
+  { key: 'women', label: 'Her story', topic: 'women', query: 'women', shelves: ['women', 'myth'] },
   { key: 'health', label: 'Health', topic: 'health', query: 'health', shelves: [] },
   { key: 'mind', label: 'Mind & mental health', topic: 'psychology', query: 'psychology', shelves: ['mind'] },
   { key: 'classics', label: 'Classics', topic: 'classics', query: 'classics', shelves: ['start', 'big'] },
