@@ -8,7 +8,7 @@ export const tapZones = (key) => TAP_ZONES[key] || TAP_ZONES.thirds;
 
 export const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function opaqueBg(el) {
+export function opaqueBg(el) {
   for (let n = el; n; n = n.parentElement) {
     const c = getComputedStyle(n).backgroundColor;
     if (c && c !== 'transparent' && !/,\s*0\)$/.test(c)) return c;

@@ -45,8 +45,10 @@ export const TOOLBAR_ITEMS = {
   display: 'Display settings',
   tts: 'Read aloud',
   sounds: 'Background sounds',
+  pen: 'Highlighter',
   annotations: 'Highlights & notes',
   bookmark: 'Bookmark',
+  capture: 'Capture page',
   fullscreen: 'Full screen',
 };
 

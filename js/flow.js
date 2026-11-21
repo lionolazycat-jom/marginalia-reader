@@ -5,7 +5,7 @@
 
 import { h, debounce, clamp, throttle } from './util.js';
 import { FONTS } from './settings.js';
-import { snapshot, playTurn, clearTurn, reducedMotion } from './turn.js';
+import { snapshot, playTurn, clearTurn, reducedMotion, opaqueBg } from './turn.js';
 
 export class FlowEngine {
   constructor(host, book, opts) {
@@ -405,6 +405,77 @@ export class FlowEngine {
       if (this.rendered && !o.smooth) this.lastLoc = this.currentLoc();
       this.emit();
     }
+  }
+
+  /** Paint the page that is on screen (text, highlights, pictures) onto a canvas, for saving or sharing. */
+  captureCanvas(caption = '', scale = 2) {
+    const vr = this.viewport.getBoundingClientRect();
+    const W = Math.round(vr.width), H = Math.round(vr.height);
+    const cv = document.createElement('canvas');
+    cv.width = W * scale; cv.height = H * scale;
+    const ctx = cv.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.fillStyle = opaqueBg(this.viewport);
+    ctx.fillRect(0, 0, W, H);
+    const seen = (r) => r.right > vr.left && r.left < vr.right && r.bottom > vr.top && r.top < vr.bottom && r.width > 0;
+    for (const hl of this.content.querySelectorAll('.hl')) {
+      const bg = getComputedStyle(hl).backgroundColor;
+      for (const r of hl.getClientRects()) if (seen(r)) { ctx.fillStyle = bg; ctx.fillRect(r.left - vr.left, r.top - vr.top, r.width, r.height); }
+    }
+    for (const img of this.content.querySelectorAll('img')) {
+      const r = img.getBoundingClientRect();
+      if (seen(r) && img.complete && img.naturalWidth) { try { ctx.drawImage(img, r.left - vr.left, r.top - vr.top, r.width, r.height); } catch { /* cross-origin */ } }
+    }
+    const walker = document.createTreeWalker(this.content, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    const styles = new Map();
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = n.nodeValue;
+      if (!text || !/\S/.test(text)) continue;
+      const el = n.parentElement;
+      if (!el || el.closest('.turn-layer')) continue;
+      const pr = el.getBoundingClientRect();
+      if (pr.right < vr.left || pr.left > vr.right) continue;
+      let st = styles.get(el);
+      if (!st) {
+        const cs = getComputedStyle(el);
+        ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+        st = { font: ctx.font, color: cs.color, ls: cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing, upper: cs.textTransform === 'uppercase', asc: ctx.measureText('Hg').fontBoundingBoxAscent || parseFloat(cs.fontSize) * 0.8 };
+        styles.set(el, st);
+      }
+      ctx.font = st.font; ctx.fillStyle = st.color; ctx.textBaseline = 'alphabetic';
+      if ('letterSpacing' in ctx) ctx.letterSpacing = st.ls;
+      const draw = (str, r) => { if (seen(r)) ctx.fillText(st.upper ? str.toUpperCase() : str, r.left - vr.left, r.top - vr.top + st.asc); };
+      const re = /\S+/g;
+      for (let m = re.exec(text); m; m = re.exec(text)) {
+        range.setStart(n, m.index); range.setEnd(n, m.index + m[0].length);
+        const rects = range.getClientRects();
+        if (rects.length === 1) { draw(m[0], rects[0]); continue; }
+        // A hyphenated word runs over two lines: paint each line's piece where the browser put it, then the hyphen.
+        const lines = [];
+        for (let i = 0; i < m[0].length; i++) {
+          range.setStart(n, m.index + i); range.setEnd(n, m.index + i + 1);
+          const cr = range.getClientRects()[0];
+          if (!cr) continue;
+          const last = lines[lines.length - 1];
+          if (last && Math.abs(cr.top - last.top) < 4) { last.text += m[0][i]; } else lines.push({ top: cr.top, left: cr.left, bottom: cr.bottom, text: m[0][i] });
+        }
+        const hw = ctx.measureText('-').width;
+        lines.forEach((ln, k) => {
+          // Chrome reports a word's continuation line shifted by the hyphen that ended the line before.
+          const left = ln.left - (k > 0 ? hw : 0);
+          const width = ctx.measureText(ln.text).width;
+          draw(ln.text, { left, top: ln.top, right: left + width, bottom: ln.bottom, width });
+          if (k < lines.length - 1 && !/[-\u2010\u2011]$/.test(ln.text)) draw('-', { left: left + width, top: ln.top, right: left + width + hw, bottom: ln.bottom, width: hw });
+        });
+      }
+    }
+    if (caption) {
+      ctx.font = '500 11px system-ui, sans-serif'; ctx.fillStyle = getComputedStyle(this.content).color; ctx.globalAlpha = 0.55; ctx.textAlign = 'center';
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+      ctx.fillText(caption, W / 2, H - 14); ctx.globalAlpha = 1;
+    }
+    return cv;
   }
 
   /** Which effect to use right now ('none' when motion is off or the chapter is too big to copy cheaply). */

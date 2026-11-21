@@ -413,6 +413,27 @@ export class PdfEngine {
     if (this.mode === 'scroll') { this.viewport.scrollBy({ top: -this.viewport.clientHeight * 0.9, behavior: 'smooth' }); return; }
     if (this.spread > 0) this.turn('prev', () => this.showSpread(this.spread - 1));
   }
+  /** The page(s) on screen as one canvas, for saving or sharing. */
+  captureCanvas() {
+    const vr = this.viewport.getBoundingClientRect();
+    const vis = [...this.viewport.querySelectorAll('.pdf-page')].map((el) => ({ el, r: el.getBoundingClientRect(), cv: el.querySelector('canvas') }))
+      .filter((x) => x.cv && x.cv.width > 0 && x.r.bottom > vr.top && x.r.top < vr.bottom && x.r.right > vr.left && x.r.left < vr.right);
+    if (!vis.length) return null;
+    const L = Math.max(vr.left, Math.min(...vis.map((x) => x.r.left))), T = Math.max(vr.top, Math.min(...vis.map((x) => x.r.top)));
+    const R = Math.min(vr.right, Math.max(...vis.map((x) => x.r.right))), B = Math.min(vr.bottom, Math.max(...vis.map((x) => x.r.bottom)));
+    const k = vis[0].cv.width / vis[0].r.width || 1;
+    const out = document.createElement('canvas');
+    out.width = Math.round((R - L) * k); out.height = Math.round((B - T) * k);
+    const ctx = out.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out.width, out.height);
+    for (const { r, cv } of vis) {
+      ctx.save();
+      try { const f = getComputedStyle(cv).filter; if (f && f !== 'none') ctx.filter = f; } catch { /* unsupported */ }
+      ctx.drawImage(cv, (r.left - L) * k, (r.top - T) * k, r.width * k, r.height * k);
+      ctx.restore();
+    }
+    return out;
+  }
   turn(dir, change) {
     const st = this.settings.pageAnim || 'curl';
     if (st === 'none' || reducedMotion() || !this.ready) { change(); return; }

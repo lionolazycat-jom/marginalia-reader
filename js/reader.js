@@ -267,7 +267,7 @@ class Reader {
   // ---------------- chrome ----------------
   buildChrome() {
     const ui = state.ui.toolbar;
-    const LBL = { toc: 'Contents', search: 'Search', annotations: 'Notes', tts: 'Listen', sounds: 'Sounds', bookmark: 'Bookmark', display: 'Display', fullscreen: 'Full screen' };
+    const LBL = { toc: 'Contents', search: 'Search', pen: 'Highlight', capture: 'Capture', annotations: 'Notes', tts: 'Listen', sounds: 'Sounds', bookmark: 'Bookmark', display: 'Display', fullscreen: 'Full screen' };
     const tb = (key, ico, label, fn, extra) => { if (ui[key] === false) return null; const b = iconBtn(ico, label, fn, { class: `rd-btn rd-${key}`, ...extra }); b.append(h('span.rd-lbl', LBL[key] || '')); return b; };
     this.titleEl = h('div.rd-title', h('div.rd-book', this.book.title), h('div.rd-chapter', this.book.author || ''));
     this.bookmarkBtn = tb('bookmark', 'bookmark', 'Bookmark this page (B)', () => this.toggleBookmark());
@@ -277,15 +277,18 @@ class Reader {
     this.tools = {
       toc: tb('toc', 'toc', 'Contents (T)', () => this.togglePanel('toc')),
       search: tb('search', 'search', 'Search in book (/)', () => this.togglePanel('search')),
-      annotations: tb('annotations', 'highlight', 'Highlights & notes (H)', () => this.togglePanel('annotations')),
+      pen: tb('pen', 'highlight', 'Highlighter: pick a colour, then select text (L)', (e) => this.penMenu(e.currentTarget)),
+      annotations: tb('annotations', 'note', 'Highlights & notes (H)', () => this.togglePanel('annotations')),
       tts: tb('tts', 'speaker', 'Read aloud (R)', () => this.toggleTts()),
       sounds: tb('sounds', 'waves', 'Background sounds (S)', () => this.togglePanel('sounds')),
       bookmark: this.bookmarkBtn,
     };
     this.displayBtn = tb('display', 'type', 'Display settings (A)', () => this.togglePanel('display'));
+    this.penBtn = this.tools.pen;
+    this.captureBtn = tb('capture', 'camera', 'Save this page as an image (C)', () => this.capturePage());
     this.fsBtn = tb('fullscreen', 'fullscreen', 'Full screen (F)', () => this.toggleFullscreen());
     this.moreBtn = iconBtn('more', 'More options', (e) => this.moreMenu(e.currentTarget), { class: 'rd-btn rd-more' });
-    this.toolsEl = h('div.rd-tools', ...Object.values(this.tools).slice(0, 5), this.viewBtn, this.displayBtn, this.bookmarkBtn, this.fsBtn, this.moreBtn);
+    this.toolsEl = h('div.rd-tools', ...Object.values(this.tools).slice(0, 6), this.viewBtn, this.displayBtn, this.bookmarkBtn, this.captureBtn, this.fsBtn, this.moreBtn);
     this.top = h('header.rd-top', { role: 'toolbar', 'aria-label': 'Reading tools' },
       iconBtn('back', 'Back to library', () => this.close(), { class: 'rd-btn rd-back' }),
       this.titleEl,
@@ -294,7 +297,7 @@ class Reader {
     this.dock = h('div.rd-dock', { role: 'toolbar', 'aria-label': 'Reader tools' });
     const mq = matchMedia('(max-width: 700px)');
     const place = () => {
-      const order = ['toc', 'search', 'annotations', 'tts', 'sounds', 'bookmark'].map((k) => this.tools[k]).filter(Boolean);
+      const order = ['toc', 'search', 'pen', 'annotations', 'tts', 'sounds', 'bookmark'].map((k) => this.tools[k]).filter(Boolean);
       if (mq.matches) order.forEach((el) => this.dock.append(el));
       else {
         for (const el of order) {
@@ -390,6 +393,8 @@ class Reader {
         { label: 'Full screen', icon: 'fullscreen', run: () => this.toggleFullscreen() },
         'sep'] : []),
       ...(this.isPdfBook && this.canBookView ? [{ label: this.view === 'book' ? 'Show original pages' : 'Read in Book view', icon: this.view === 'book' ? 'copy' : 'book', run: () => this.switchView(this.view === 'book' ? 'original' : 'book') }] : []),
+      { label: 'All bookmarks', icon: 'bookmark', run: () => { this.tocTab = 'bookmarks'; this.togglePanel('toc', true); } },
+      { label: 'Save page as image', icon: 'camera', run: () => this.capturePage() },
       { label: 'Book details', icon: 'book', run: () => this.showDetails() },
       { label: 'Export highlights & notes', icon: 'download', run: () => exportBookAnnotations(this.book) },
       { label: perBook ? 'Use my default settings' : 'Keep these settings for this book', icon: 'sliders', run: () => this.setPerBook(!perBook) },
@@ -539,6 +544,8 @@ class Reader {
       case 'a': case 'A': handled(); this.togglePanel('display'); break;
       case 'h': case 'H': handled(); this.togglePanel('annotations'); break;
       case 'b': case 'B': handled(); this.toggleBookmark(); break;
+      case 'l': case 'L': handled(); this.penMenu(this.penBtn || this.stage); break;
+      case 'c': case 'C': handled(); this.capturePage(); break;
       case 'f': case 'F': handled(); this.toggleFullscreen(); break;
       case 'r': case 'R': handled(); this.toggleTts(); break;
       case 'm': case 'M': handled(); this.toggleChrome(); break;
@@ -636,7 +643,7 @@ class Reader {
       else snippet = this.engine.chapterText(info.loc.ch).slice(info.loc.off, info.loc.off + 160).replace(/\s+/g, ' ').trim();
     } catch {}
     await addBookmark({ bookId: this.book.id, loc: info.loc, progress: info.progress, label: info.chapterTitle || info.pageLabel, pageLabel: info.pageLabel, snippet });
-    toast('Page bookmarked');
+    toast('Page bookmarked', { action: { label: 'View all', run: () => { this.tocTab = 'bookmarks'; this.togglePanel('toc', true); } } });
   }
 
   // ---------------- selection & annotations ----------------
@@ -645,7 +652,50 @@ class Reader {
     const s = hasSelection() ? this.engine.selectionLoc() : null;
     if (!s) { if (this.selPop && !this.selPop.contains(document.activeElement)) this.hideSelPop(); return; }
     this.sel = s;
+    if (this.hlPen) {
+      // Highlighter on: wait for the finger to stop adjusting the selection, then highlight it.
+      clearTimeout(this.penT);
+      this.penT = setTimeout(() => { if (this.hlPen && hasSelection()) this.createAnnotation({ color: this.hlPen, style: 'highlight' }); }, 700);
+      return;
+    }
     this.showSelPop(s);
+  }
+
+  penMenu(anchor) {
+    if (this.closePops()) return;
+    const pop = h('div.rd-pop.pen-pop', { role: 'dialog', 'aria-label': 'Highlighter' },
+      h('p.pen-title', this.hlPen ? 'Highlighter is on' : 'Pick a highlighter'),
+      h('div.pop-colors', Object.entries(HL_COLORS).map(([k, c]) => h('button.swatch', { type: 'button', class: `swatch ${this.hlPen === k ? 'on' : ''}`, 'aria-label': `Highlight in ${c.label}`, title: c.label, style: { '--sw': c.css }, onclick: () => this.setPen(k) }))),
+      h('p.hint', 'Then select text and it is highlighted at once.'),
+      this.hlPen ? h('button.btn.btn-small', { type: 'button', onclick: () => this.setPen(null) }, 'Turn off') : null);
+    this.placePop(pop, anchor.getBoundingClientRect(), false);
+  }
+  setPen(color) {
+    this.hlPen = color;
+    this.closePops();
+    const b = this.penBtn;
+    if (b) { b.classList.toggle('active', !!color); b.classList.toggle('has-pen', !!color); if (color) b.style.setProperty('--pen', HL_COLORS[color].css); }
+    toast(color ? `Highlighter on (${HL_COLORS[color].label.toLowerCase()}). Select text to highlight it.` : 'Highlighter off');
+    saveUI({ lastColor: color || state.ui.lastColor });
+  }
+
+  async capturePage() {
+    try {
+      const caption = `${this.book.title}${this.book.author ? ' · ' + this.book.author : ''}${this.info?.pageLabel ? ' · ' + this.info.pageLabel : ''}`;
+      const cv = this.isPdf ? this.engine.captureCanvas() : this.engine.captureCanvas(caption);
+      if (!cv) { toast('Nothing to capture yet.'); return; }
+      const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+      const name = `${this.book.title}${this.info?.pageLabel ? ' - ' + this.info.pageLabel : ''}`.replace(/[\\/:*?"<>|]+/g, '').slice(0, 80) + '.png';
+      const file = new File([blob], name, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: this.book.title }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = h('a', { href: url, download: name });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      toast('Page saved as an image');
+    } catch (e) { console.warn(e); toast('Couldn’t capture this page.'); }
   }
 
   closePops() {
@@ -1149,7 +1199,7 @@ function toggle(label, value, onChange) {
 export function showShortcuts() {
   const keys = [
     ['→  ·  Space  ·  Page Down', 'Next page'], ['←  ·  Shift+Space  ·  Page Up', 'Previous page'], ['Home / End', 'Start / end of book'],
-    ['T', 'Contents'], ['/  or  Ctrl+F', 'Search in book'], ['H', 'Highlights & notes'], ['A', 'Display settings'], ['B', 'Bookmark page'],
+    ['T', 'Contents'], ['/  or  Ctrl+F', 'Search in book'], ['H', 'Highlights & notes'], ['A', 'Display settings'], ['B', 'Bookmark page'], ['L', 'Highlighter on / off'], ['C', 'Save this page as an image'],
     ['R', 'Read aloud: play / pause'], ['F', 'Full screen'], ['V', 'PDF: Book view / original pages'], ['S', 'Background sounds'], ['M', 'Show / hide toolbar'], ['+  /  −', 'Text size (PDF: zoom)'], ['0', 'PDF: automatic zoom'], ['Esc', 'Close panel or popup'],
   ];
   dialog({ title: 'Keyboard shortcuts', body: h('dl.shortcuts', keys.map(([k, v]) => [h('dt', h('kbd', k)), h('dd', v)])), actions: [{ label: 'Close', value: true, primary: true }] });

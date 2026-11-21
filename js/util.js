@@ -203,6 +203,7 @@ const P = {
   library: 'M5 4h3v16H5zM10 4h3v16h-3zM15.2 4.6l2.9-.8 3.9 15.5-2.9.8z',
   collection: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
   bookmark: 'M6 3h12v18l-6-4.5L6 21z',
+  camera: 'M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z',
   highlight: 'M14.5 4.5 19.5 9.5 10 19H5v-5zM12.5 6.5l5 5M4 21h16',
   note: 'M5 3h10l4 4v14H5zM14 3v5h5M8 12h8M8 16h6',
   stats: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
