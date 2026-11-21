@@ -45,6 +45,8 @@ export function initPwa() {
       if (!w) return;
       w.addEventListener('statechange', () => {
         if (w.state === 'installed' && navigator.serviceWorker.controller) {
+          // Away from a book, switch to the new version straight away; mid-book, ask.
+          if (!document.body.classList.contains('is-reading')) { w.postMessage('skip-waiting'); return; }
           toast('A new version of Marginalia is ready.', { ms: 15000, action: { label: 'Update', run: () => { w.postMessage('skip-waiting'); } } });
         }
       });
