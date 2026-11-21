@@ -904,3 +904,7 @@ body.is-reading .app { visibility: hidden; }
 
 .toast-action { min-height: 32px; padding-inline: 10px; }
 @media (max-width: 480px) { .hero-cover { justify-self: center; align-self: center; } }
+
+.flow-content strong { font-weight: 700; } .flow-content em { font-style: italic; }
+.flow-content .x-center { text-indent: 0; text-align: center; }
+.flow-content :is(h1,h2,h3,h4,h5,h6).x-center { text-align: center; }
