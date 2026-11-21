@@ -789,3 +789,4 @@ body.is-reading .app { visibility: hidden; }
 .pref-slider input { accent-color: var(--accent); width: 100%; }
 .pref select { max-width: 100%; }
 #tts-voice-pref { max-width: min(380px, 100%); }
+.visually-hidden { position: fixed !important; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

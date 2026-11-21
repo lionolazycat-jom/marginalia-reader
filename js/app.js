@@ -108,7 +108,10 @@ function buildShell() {
   const tabs = [['home', 'Home', 'home'], ['library', 'Library', 'library'], ['highlights', 'Highlights', 'highlight'], ['notes', 'Notes', 'note']];
   tab.append(...tabs.map(([k, l, ic]) => h('a.tab', { href: '#' + k, dataset: { view: k } }, icon(ic, 22), h('span', l))),
     h('button.tab', { type: 'button', onclick: (e) => menu(e.currentTarget, [['collections', 'Collections', 'collection'], ['bookmarks', 'Bookmarks', 'bookmark'], ['stats', 'Statistics', 'stats'], ['preferences', 'Preferences', 'settings']].map(([k, l, ic]) => ({ label: l, icon: ic, run: () => go(k) }))) }, icon('menu', 22), h('span', 'More')));
-  $('#file-input').accept = ACCEPT;
+  // Phones mislabel book files (an .epub often shows as "unknown"), so a type filter there
+  // greys files out or hides the Files/folder option. Only desktops get the filter.
+  const touch = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (!touch) $('#file-input').accept = ACCEPT;
   $('#file-input').addEventListener('change', (e) => { const f = [...e.target.files]; e.target.value = ''; importFiles(f); });
 }
 
@@ -685,7 +688,7 @@ VIEWS.preferences = async (page) => {
   const est = await storageEstimate();
   const usage = est ? `${fmtBytes(est.usage)} used${est.quota ? ` of about ${fmtBytes(est.quota)} available` : ''}` : 'Storage size unknown';
   const backup = h('button.btn', { type: 'button', onclick: async () => { const json = await exportBackup(); report(await saveFile(`marginalia-backup-${dayKey()}.json`, json, 'application/json')); } }, icon('download', 16), 'Back up');
-  const restore = h('button.btn', { type: 'button', onclick: () => { const inp = h('input', { type: 'file', accept: '.json,application/json' }); inp.onchange = () => inp.files[0] && restoreFrom(inp.files[0]); inp.click(); } }, icon('upload', 16), 'Restore from backup');
+  const restore = h('button.btn', { type: 'button', onclick: () => { const inp = h('input.visually-hidden', { type: 'file' }); inp.onchange = () => { if (inp.files[0]) restoreFrom(inp.files[0]); inp.remove(); }; document.body.append(inp); inp.click(); } }, icon('upload', 16), 'Restore from backup');
   const persistBtn = est && !est.persisted ? h('button.btn.btn-small', { type: 'button', onclick: async () => { const ok = await requestPersistence(); toast(ok ? 'Storage is now protected from automatic cleanup.' : 'The browser declined. Your data is still saved, but may be cleared if the device runs low on space.'); rerender(); } }, 'Protect storage') : null;
   page.append(h('section.card.pref', h('h2', 'Your data'),
     h('div.pref-row', h('span', 'Storage'), h('span.muted', usage, est?.persisted ? ' · protected' : '')), persistBtn,

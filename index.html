@@ -29,7 +29,7 @@
 <div id="reader" class="reader" hidden></div>
 <div id="drop" class="drop-overlay" hidden><div class="drop-inner">Drop books to add them to your library</div></div>
 <div id="toasts" class="toasts" aria-live="polite"></div>
-<input id="file-input" type="file" multiple hidden>
+<input id="file-input" class="visually-hidden" type="file" multiple tabindex="-1" aria-hidden="true">
 <noscript><p style="padding:2rem;font-family:sans-serif">Marginalia needs JavaScript to run.</p></noscript>
 <script type="module">
   import { boot } from './js/app.js';

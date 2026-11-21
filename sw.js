@@ -1,5 +1,5 @@
 // Marginalia service worker: the whole app is cached on install, so it opens and reads offline.
-const VERSION = "267bf44faf";
+const VERSION = "0f7b6eab44";
 const APP_CACHE = `marginalia-app-${VERSION}`;
 const FONT_CACHE = 'marginalia-fonts-v1';
 const PRECACHE = [
