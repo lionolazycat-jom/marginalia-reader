@@ -950,3 +950,12 @@ body.is-reading .app { visibility: hidden; }
 @media (max-width: 700px) { .rd-top .rd-capture .rd-lbl { display: none; } }
 .rd-handle { border-color: color-mix(in srgb, var(--rd-fg) 28%, var(--rd-line)); color: var(--rd-fg); height: 26px; }
 .reader:not(.chrome-hidden) .rd-handle { top: calc(56px + var(--safe-t)); }
+
+/* Two pages: two paper sheets on a soft desk */
+.flow-viewport.is-spread { background: color-mix(in srgb, var(--rd-bg) 90%, #000); }
+.reader[data-dark="1"] .flow-viewport.is-spread { background: color-mix(in srgb, var(--rd-bg) 62%, #000); }
+.flow-sheet { position: absolute; background: var(--rd-bg); border-radius: 2px; pointer-events: none;
+  box-shadow: 0 1px 3px rgb(0 0 0 / .12), 0 6px 18px -8px rgb(0 0 0 / .3); }
+.reader[data-dark="1"] .flow-sheet { box-shadow: 0 0 0 1px rgb(255 255 255 / .06); }
+.flow-sheet-no { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font: 500 11px/1 var(--ui, system-ui); color: var(--rd-muted); font-variant-numeric: tabular-nums; }
+.flow-viewport.is-spread .flow-frame { z-index: 1; }

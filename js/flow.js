@@ -5,6 +5,7 @@
 
 import { h, debounce, clamp, throttle } from './util.js';
 import { FONTS } from './settings.js';
+import { bindPenDrag } from './pen.js';
 import { snapshot, playTurn, clearTurn, reducedMotion, opaqueBg } from './turn.js';
 
 export class FlowEngine {
@@ -55,6 +56,7 @@ export class FlowEngine {
       wheelLock = now;
       d > 0 ? this.next() : this.prev();
     }, { passive: false });
+    bindPenDrag(this.viewport, () => this.mode === 'paged' && !!this.opts.penOn?.());
     // Swipe page turns (touch). Long-press selection is left to the browser.
     let sx = 0, sy = 0, st = 0, tracking = false;
     this.viewport.addEventListener('touchstart', (e) => {
@@ -66,7 +68,7 @@ export class FlowEngine {
       tracking = false;
       const t = e.changedTouches[0];
       const dx = t.clientX - sx, dy = t.clientY - sy;
-      if (hasSelection()) return;
+      if (hasSelection() || this.opts.penOn?.()) return;
       if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4 && Date.now() - st < 700) {
         this.swiped = Date.now();
         dx < 0 ? this.next() : this.prev();
@@ -91,6 +93,7 @@ export class FlowEngine {
     const r = this.viewport.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width;
     const [zl, zr] = this.opts.zones?.() || [0.28, 0.72];
+    if (this.opts.penOn?.() && this.mode === 'paged' && (x < zl || x > zr)) return;   // pen on: edge taps don't turn pages
     this.opts.onTap?.(x < zl ? 'left' : x > zr ? 'right' : 'center', e);
   }
 
@@ -133,6 +136,14 @@ export class FlowEngine {
       if (s.spread === 'double') n = vw >= 340 ? 2 : 1;   // asked for two pages: give them, even on an upright phone
       else if (s.spread === 'auto') n = vw > vh * 1.05 && vw >= 560 ? 2 : 1;   // any screen held sideways gets two pages
     }
+    if (n === 2) {
+      // Two pages are drawn as two paper sheets side by side, like a printed spread.
+      const pad = vw < 600 ? 12 : 26, om = vw < 600 ? 6 : 16, sg = vw < 600 ? 8 : 14;
+      const colW = Math.max(120, Math.min(measure, (vw - 2 * om - sg - 4 * pad) / 2));
+      const gap = 2 * pad + sg, width = Math.round(2 * colW + gap);
+      const top = Math.max(s.vMargin, 36), bottom = top;
+      return { vw, vh, n, gap, width, height: Math.max(160, vh - top - bottom), top, left: Math.round((vw - width) / 2), pad, sg, sheets: true };
+    }
     const gap = n === 2 ? Math.max(48, margin * 1.5) : margin * 2;
     const width = this.mode === 'scroll' ? Math.min(avail, measure) : Math.min(avail, n * measure + (n - 1) * gap);
     const top = s.vMargin, bottom = s.vMargin;
@@ -154,7 +165,9 @@ export class FlowEngine {
       this.stride = g.width + g.gap;
       this.viewport.style.setProperty('--page-h', g.height + 'px');
       this.viewport.style.setProperty('--col-w', colW + 'px');
+      this.layoutSheets(g, colW);
     } else {
+      this.layoutSheets(null);
       f.left = '0'; f.width = '100%'; f.top = '0'; f.height = '100%';
       c.width = g.width + 'px';
       c.height = 'auto';
@@ -163,6 +176,25 @@ export class FlowEngine {
       c.padding = `${g.top}px 0 ${g.top + 40}px`;
       this.viewport.style.setProperty('--page-h', Math.round(g.vh * 0.85) + 'px');
     }
+  }
+
+  layoutSheets(g, colW) {
+    const on = !!(g && g.sheets);
+    this.viewport.classList.toggle('is-spread', on);
+    if (!on) { this.sheets?.forEach((x) => x.remove()); this.sheets = null; return; }
+    if (!this.sheets) {
+      this.sheets = [0, 1].map(() => h('div.flow-sheet', { 'aria-hidden': 'true' }, h('span.flow-sheet-no')));
+      this.viewport.prepend(...this.sheets);
+    }
+    const sTop = Math.max(6, g.top - 30), sH = g.vh - sTop * 1;
+    const w = colW + 2 * g.pad;
+    this.sheets.forEach((el, i) => {
+      const st = el.style;
+      st.left = Math.round(g.left + i * (colW + g.gap) - g.pad) + 'px';
+      st.width = Math.round(w) + 'px';
+      st.top = sTop + 'px';
+      st.height = Math.max(160, g.vh - sTop - Math.max(6, g.top - 30)) + 'px';
+    });
   }
 
   relayout(loc) {
@@ -489,7 +521,7 @@ export class FlowEngine {
     const st = this.turnStyle();
     const overlay = st === 'curl' || st === 'fade';
     if (overlay) {
-      const sn = snapshot(this.frame, this.viewport);
+      const sn = snapshot(this.frame, this.viewport, this.sheets);
       await change(true);
       playTurn(this.viewport, sn, dir, st);
     } else {
@@ -550,6 +582,13 @@ export class FlowEngine {
       totalPages = Math.max(1, Math.round(this.total / cpp));
       page = clamp(Math.round(progress * totalPages) + 1, 1, totalPages);
       pageLabel = `Page ${page} of ${totalPages}`;
+    }
+    if (this.mode === 'paged' && this.geo?.n === 2 && page != null) {
+      // Count every sheet, not every spread, so the footer matches the numbers printed on the sheets.
+      const a = (page - 1) * 2 + 1, tot = totalPages * 2;
+      page = a; totalPages = tot;
+      pageLabel = `Page ${a}\u2013${Math.min(a + 1, tot)} of ${tot}`;
+      this.sheets?.forEach((el, i) => { const no = el.firstChild; no.textContent = a + i <= tot ? String(a + i) : ''; });
     }
     const charsLeftCh = Math.max(0, (this.chLens[loc.ch] || 0) - loc.off);
     const atEnd = loc.ch === this.book.chapters.length - 1 && (this.mode === 'paged' ? this.page >= this.pages - 1 : this.frame.scrollTop + this.frame.clientHeight >= this.frame.scrollHeight - 4);

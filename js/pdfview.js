@@ -2,6 +2,7 @@
 // selectable text layer, percentage-positioned highlight layer (zoom-independent),
 // continuous / single / two-page layouts, fit-width / fit-page / custom zoom, pinch zoom.
 
+import { bindPenDrag } from './pen.js';
 import { h, clamp, debounce, throttle } from './util.js';
 import { getPdfjs, pdfOutline, destToPage, closePdf } from './pdfcore.js';
 import { hasSelection } from './flow.js';
@@ -98,6 +99,7 @@ export class PdfEngine {
         else if (e.deltaY < 0 && atTop) { this.wheelT = now; e.preventDefault(); this.prev(); }
       }
     }, { passive: false });
+    bindPenDrag(this.viewport, () => this.mode !== 'scroll' && !!this.opts.penOn?.());
     // pinch zoom + swipe
     let pinch = null, sx = 0, sy = 0, st = 0;
     this.viewport.addEventListener('touchstart', (e) => {
@@ -122,7 +124,7 @@ export class PdfEngine {
         if (Math.abs(r - 1) > 0.03) this.zoomBy(r);
         return;
       }
-      if (this.mode === 'scroll' || e.changedTouches.length !== 1 || hasSelection()) return;
+      if (this.mode === 'scroll' || e.changedTouches.length !== 1 || hasSelection() || this.opts.penOn?.()) return;
       const t = e.changedTouches[0];
       const dx = t.clientX - sx, dy = t.clientY - sy;
       const v = this.viewport;
@@ -152,6 +154,7 @@ export class PdfEngine {
     // In continuous mode the edges are for reading, not page turns.
     if (this.mode === 'scroll') { this.opts.onTap?.('center', e); return; }
     const [zl, zr] = this.opts.zones?.() || [0.28, 0.72];
+    if (this.opts.penOn?.() && (fx < zl || fx > zr)) return;   // pen on: edge taps don't turn pages
     this.opts.onTap?.(fx < zl ? 'left' : fx > zr ? 'right' : 'center', e);
   }
 

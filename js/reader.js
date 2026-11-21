@@ -255,6 +255,7 @@ class Reader {
       onRelocate: (info) => this.onRelocate(info),
       onTap: (zone, e) => this.onTap(zone, e),
       zones: () => tapZones(state.ui.tapZone),
+      penOn: () => !!this.hlPen,
       onAnnotation: (id, rect) => this.showAnnotationPop(id, rect),
       onLink: (t, el) => this.onLink(t, el),
       onToc: () => this.refreshToc(),
@@ -679,7 +680,7 @@ class Reader {
     this.closePops();
     const b = this.penBtn;
     if (b) { b.classList.toggle('active', !!color); b.classList.toggle('has-pen', !!color); if (color) b.style.setProperty('--pen', HL_COLORS[color].css); }
-    toast(color ? `Highlighter on (${HL_COLORS[color].label.toLowerCase()}). Select text to highlight it.` : 'Highlighter off');
+    toast(color ? `Highlighter on (${HL_COLORS[color].label.toLowerCase()}). Drag over text to highlight. Swiping and edge taps are paused; use the arrows to turn pages.` : 'Highlighter off');
     saveUI({ lastColor: color || state.ui.lastColor });
   }
 

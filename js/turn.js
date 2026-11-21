@@ -21,7 +21,7 @@ let active = null;
 export function clearTurn() { if (active) { active(); active = null; } }
 
 /** Copy `src` into a layer on top of `host`. Call right before changing the live page. */
-export function snapshot(src, host) {
+export function snapshot(src, host, under) {
   clearTurn();
   const layer = document.createElement('div');
   layer.className = 'turn-layer';
@@ -31,11 +31,12 @@ export function snapshot(src, host) {
   copy.removeAttribute('id');
   copy.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
   copy.classList.add('turn-copy');
-  copy.style.background = opaqueBg(host);
+  copy.style.background = under ? 'none' : opaqueBg(host);
   const from = src.querySelectorAll('canvas'), to = copy.querySelectorAll('canvas');
   from.forEach((c, i) => { try { to[i]?.getContext('2d').drawImage(c, 0, 0); } catch { /* ignore */ } });
   const clip = document.createElement('div');
   clip.className = 'turn-clip';
+  if (under) for (const u of under) { const c = u.cloneNode(true); c.style.opacity = '1'; clip.append(c); }
   clip.append(copy);
   layer.append(clip);
   host.append(layer);
