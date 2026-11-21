@@ -762,6 +762,9 @@ class Reader {
 
   // ---------------- settings ----------------
   async setSetting(key, value) {
+    if (key === 'spread' && value === 'double' && !this.isPdf && this.root.clientWidth < 560) {
+      toast('Two pages needs a wider screen. Turn your phone sideways to see them.', { ms: 5000 });
+    }
     if (this.book.settings) {
       this.book.settings = { ...this.book.settings, [key]: value };
       await updateBook(this.book, { settings: this.book.settings });
@@ -819,7 +822,7 @@ class Reader {
     p.append(body);
     if (name === 'toc') this.renderTocPanel(body);
     if (name === 'search') this.renderSearchPanel(body);
-    if (name === 'display') this.renderDisplayPanel(body);
+    if (name === 'display') { this.renderDisplayPanel(body); this.dispSig = this.dispSignature(); }
     if (name === 'annotations') this.renderAnnPanel(body);
     if (name === 'sounds') this.renderSoundsPanel(body);
   }
@@ -1020,7 +1023,9 @@ class Reader {
         slider('letterSpacing', 'Letter spacing', -0.02, 0.12, 0.005, (v) => (v * 100).toFixed(1) + '%'),
         slider('fontWeight', 'Weight', 300, 600, 50, (v) => String(v))));
       body.append(sec('Alignment', seg('align', [['left', 'Left'], ['justify', 'Justified']])));
-      body.append(sec('Layout', seg('flowLayout', [['paged', 'Pages'], ['scroll', 'Scroll']]), s.flowLayout === 'paged' ? seg('spread', [['auto', 'Auto'], ['single', 'One page'], ['double', 'Two pages']]) : null));
+      const narrowForTwo = s.flowLayout === 'paged' && s.spread === 'double' && this.engine?.geo?.n === 1;
+      body.append(sec('Layout', seg('flowLayout', [['paged', 'Pages'], ['scroll', 'Scroll']]), s.flowLayout === 'paged' ? seg('spread', [['auto', 'Auto'], ['single', 'One page'], ['double', 'Two pages']]) : null,
+        narrowForTwo ? h('p.hint.warn-hint', 'This screen is too narrow for two pages side by side. Turn your phone sideways and it switches to two pages automatically.') : null));
       body.append(sec('Options',
         toggle('Hyphenation', s.hyphenate, (v) => this.setSetting('hyphenate', v)),
         toggle('Indent paragraphs', s.indent, (v) => this.setSetting('indent', v)),
@@ -1044,6 +1049,8 @@ class Reader {
     };
   })();
 
+  dispSignature() { const s = this.settings; return `${s.theme === 'custom'}|${s.flowLayout}|${s.pdfLayout}|${s.spread}|${this.engine?.geo?.n}`; }
+
   syncDisplayPanel() {
     const s = this.settings;
     for (const b of $$('.seg button[data-key]', this.panel)) { const on = String(s[b.dataset.key]) === b.dataset.v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
@@ -1052,7 +1059,7 @@ class Reader {
     const sv = $('.size-val', this.panel); if (sv) sv.textContent = `${s.fontSize}px`;
     this.updateZoomLabel();
     // Some sections depend on values (custom colors, spreads): rebuild when they change.
-    const sig = `${s.theme === 'custom'}|${s.flowLayout}|${s.pdfLayout}`;
+    const sig = this.dispSignature();
     if (this.dispSig && this.dispSig !== sig) { const sc = this.panel.querySelector('.panel-body')?.scrollTop || 0; this.renderPanel(); const pb = this.panel.querySelector('.panel-body'); if (pb) pb.scrollTop = sc; }
     this.dispSig = sig;
   }

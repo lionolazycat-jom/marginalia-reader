@@ -125,7 +125,8 @@ export class FlowEngine {
     const measure = s.maxWidth;  // max line length in px
     let n = 1;
     if (this.mode === 'paged' && !this.book.comic) {
-      if (s.spread === 'double') n = vw > 640 ? 2 : 1;
+      // Two columns need about 270px each to stay readable (a phone held sideways qualifies).
+      if (s.spread === 'double') n = vw >= 560 ? 2 : 1;
       else if (s.spread === 'auto') n = avail > measure * 1.55 && vw > vh * 1.05 ? 2 : 1;
     }
     const gap = n === 2 ? Math.max(48, margin * 1.5) : margin * 2;
