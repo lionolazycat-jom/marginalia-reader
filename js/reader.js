@@ -329,7 +329,10 @@ class Reader {
     this.runTop = h('div.rd-run.top', { 'aria-hidden': 'true' });
     this.runBottom = h('div.rd-run.bottom', { 'aria-hidden': 'true' });
     // A small arrow tab: pulls the toolbar back down when it is tucked away, and tucks it away when it is showing.
-    this.handle = h('button.rd-handle', { type: 'button', 'aria-label': 'Show toolbar', title: 'Show / hide toolbar (M)', onclick: (e) => { e.stopPropagation(); this.chromeHidden ? (this.showChrome(true), this.hideChromeSoon(6000)) : this.tuckChrome(); } }, icon("chevronD", 14));
+    this.handle = h('button.rd-handle', { type: 'button', 'aria-label': 'Hide toolbar', title: 'Show / hide toolbar (M)',
+      // Remember the state at touch-down: emulated mouse moves near the top edge can re-show the bar before the click lands.
+      onpointerdown: () => { this.handleWasHidden = this.chromeHidden; },
+      onclick: (e) => { e.stopPropagation(); const wasHidden = this.handleWasHidden ?? this.chromeHidden; this.handleWasHidden = undefined; if (wasHidden) { this.showChrome(true); this.chromeHold = Date.now() + 6000; this.hideChromeSoon(6000); } else this.tuckChrome(); } }, icon("chevronD", 14));
     this.root.append(this.stage, this.runTop, this.runBottom, this.ribbon, this.edgeTop, this.edgeBottom, this.top, this.bottom, this.panel, this.handle);
     for (const edge of [this.edgeTop, this.edgeBottom]) edge.addEventListener('mouseenter', () => this.showChrome());
     this.top.addEventListener('mouseenter', () => this.pinChrome = true);
@@ -365,11 +368,12 @@ class Reader {
     this.chromeHidden = true;
   }
   hideChromeSoon(ms = 1800) {
+    if (this.chromeHold && Date.now() < this.chromeHold && ms < 3000) return;
     clearTimeout(this.chromeT);
     this.chromeT = setTimeout(() => this.hideChrome(), ms);
   }
   tuckChrome() { this.root.classList.add('chrome-hidden'); this.chromeHidden = true; this.handle?.setAttribute('aria-label', 'Show toolbar'); }
-  toggleChrome() { this.chromeHidden ? (this.showChrome(true), this.hideChromeSoon(5000)) : this.tuckChrome(); }
+  toggleChrome() { this.chromeHidden ? (this.showChrome(true), this.chromeHold = Date.now() + 5000, this.hideChromeSoon(5000)) : this.tuckChrome(); }
 
   onTap(zone, e) {
     this.activity();

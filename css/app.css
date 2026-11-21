@@ -900,7 +900,12 @@ body.is-reading .app { visibility: hidden; }
 .link, button.link { min-height: 32px; display: inline-flex; align-items: center; }
 .cat-chips { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); padding-right: 24px; }
 
-.reader:not(.chrome-hidden) .rd-handle { display: none; }
+/* The tab stays visible while the toolbar is open: tap it to minimise */
+.rd-handle { width: 56px; height: 24px; margin-left: -28px; z-index: 11; opacity: .95; box-shadow: 0 2px 6px rgb(0 0 0 / .08); }
+.rd-handle::before { content: ""; position: absolute; inset: -10px -8px -14px; }
+.reader:not(.chrome-hidden) .rd-handle { top: calc(56px + var(--safe-t)); }
+.reader.chrome-hidden .rd-handle { top: var(--safe-t); }
+.reader.panel-open .rd-handle { display: none; }
 
 .toast-action { min-height: 32px; padding-inline: 10px; }
 @media (max-width: 480px) { .hero-cover { justify-self: center; align-self: center; } }
@@ -943,3 +948,5 @@ body.is-reading .app { visibility: hidden; }
 .pen-pop .pen-title { margin: 0; font-weight: 600; }
 .pen-pop .hint { margin: 0; font-size: 12px; }
 @media (max-width: 700px) { .rd-top .rd-capture .rd-lbl { display: none; } }
+.rd-handle { border-color: color-mix(in srgb, var(--rd-fg) 28%, var(--rd-line)); color: var(--rd-fg); height: 26px; }
+.reader:not(.chrome-hidden) .rd-handle { top: calc(56px + var(--safe-t)); }
