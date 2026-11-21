@@ -67,7 +67,7 @@ export const DEFAULT_READING = {
   spread: 'auto',
   flowLayout: 'paged',
   hyphenate: true,
-  pageAnim: 'slide',
+  pageAnim: 'curl',
   zoom: 'auto',
   letterSpacing: 0,
   pdfLayout: 'scroll',
@@ -92,6 +92,7 @@ export const DEFAULT_UI = {
   sounds: {},
   soundsMaster: 0.8,
   tapToTurn: true,
+  tapZone: 'thirds',
 };
 
 /** The per-book keys (everything a reader might tune per book). */

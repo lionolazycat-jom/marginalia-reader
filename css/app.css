@@ -908,3 +908,14 @@ body.is-reading .app { visibility: hidden; }
 .flow-content strong { font-weight: 700; } .flow-content em { font-style: italic; }
 .flow-content .x-center { text-indent: 0; text-align: center; }
 .flow-content :is(h1,h2,h3,h4,h5,h6).x-center { text-align: center; }
+.hint-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.hint-row .hint{margin:0;flex:1 1 220px}
+/* ----- page-turn effects ----- */
+.turn-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 4; will-change: transform, opacity; }
+
+.turn-fold { position: absolute; top: 0; bottom: 0; left: 0; width: 48px; pointer-events: none; will-change: transform, opacity;
+  background: linear-gradient(to right, rgb(255 255 255 / .55) 0 2px, rgb(0 0 0 / .34) 2px, rgb(0 0 0 / .14) 38%, transparent); }
+.turn-fold.prev { background: linear-gradient(to left, rgb(255 255 255 / .55) 0 2px, rgb(0 0 0 / .34) 2px, rgb(0 0 0 / .14) 38%, transparent); }
+.flow-viewport.overlay-turn .flow-content { transition: none; }
+@media (prefers-reduced-motion: reduce) { .turn-layer, .turn-fold { display: none; } }
+.turn-clip { position: absolute; inset: 0; will-change: clip-path; }

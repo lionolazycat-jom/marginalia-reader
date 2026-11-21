@@ -9,7 +9,7 @@ import { openReader, activeReader, showShortcuts, listVoices, sortVoices, VOICE_
 import { installState, promptInstall, onInstallChange, initPwa } from './pwa.js';
 import { exportAnnotationList, report, safeName } from './exporter.js';
 import { WELCOME_MD } from './welcome.js';
-import { SHELVES, LANGUAGES, CATEGORIES, categorize, categoryLabel, search as searchFree, downloadBook, gutenbergPage } from './freebooks.js';
+import { SHELVES, LANGUAGES, CATEGORIES, categorize, categoryLabel, search as searchFree, downloadBook, gutenbergPage, localForCategory, bookFromLink } from './freebooks.js';
 
 const NAV = [
   ['home', 'Home', 'home'],
@@ -511,15 +511,25 @@ VIEWS.free = (page) => {
     const grid = h('div.book-grid.free-grid');
     const more = h('div.row.center');
     box.append(note, grid, more);
+    const addCards = (books) => { const have = new Set([...grid.children].map((c) => c.dataset.id)); for (const b of books) if (!have.has(String(b.id))) { const el = freeCard(b); el.dataset.id = b.id; grid.append(el); } };
+    const retry = () => { grid.replaceChildren(); load(1); };
+    const unavailableNote = (hasLocal) => h('div.hint-row', h('p.hint', hasLocal ? 'The full Gutenberg catalogue isn’t answering right now (it’s down for maintenance), so this shows the books that come with the app.' : 'The full Gutenberg catalogue isn’t answering right now (it’s down for maintenance) and the app has no saved books for this yet.'), h('button.btn', { type: 'button', onclick: retry }, 'Try again'));
     const load = async (pg) => {
       more.textContent = '';
-      more.append(h('div.spinner.small'));
+      // A pasted Project Gutenberg link or ebook number works even when the catalogue is down.
+      const direct = pg === 1 && !cat ? bookFromLink(free.q) : null;
+      if (direct) { grid.replaceChildren(); addCards([direct]); note.replaceChildren(h('p.hint', 'Found by its Project Gutenberg number. The title is filled in once the book is added.')); return; }
+      // Books that ship with the app show instantly while the live catalogue is asked.
+      const local = pg === 1 && cat ? localForCategory(cat.key) : [];
+      if (local.length) addCards(local);
+      more.append(h('div.spinner.small'), h('span.muted', ' Looking in the full catalogue…'));
       const r = await searchFree({ q: cat ? '' : free.q, cat: cat?.key, lang: free.lang, page: pg });
-      if (r.unavailable) note.replaceChildren(h('p.hint', cat ? 'The full Gutenberg catalogue isn’t answering right now, so this shows only the books that come with the app. Try again later for the whole category.' : 'The full Gutenberg catalogue isn’t answering right now, so these results come from the shelves below. Try again later for everything.'));
-      else if (r.offline) note.replaceChildren(h('p.hint', 'Showing results saved from earlier.'));
-      if (pg === 1 && !r.books.length) grid.replaceWith(h('p.empty-note', cat ? 'Nothing to show in this category right now. Try again when you’re online and the catalogue is up.' : `No free books found for “${free.q}”. Try the author’s surname or fewer words.`));
-      for (const b of r.books) grid.append(freeCard(b));
       more.textContent = '';
+      if (r.unavailable) note.replaceChildren(unavailableNote(local.length > 0 || r.books.length > 0));
+      else if (r.offline) note.replaceChildren(h('p.hint', 'Showing results saved from earlier.'));
+      else note.replaceChildren();
+      if (pg === 1 && !r.books.length && !local.length) grid.replaceWith(h('p.empty-note', cat ? 'Nothing to show in this category yet. Try again when the catalogue is back.' : `No free books found for “${free.q}”. Try the author’s surname or fewer words.`));
+      addCards(r.books);
       if (r.next) more.append(h('button.btn', { type: 'button', onclick: () => load(r.next) }, 'Show more'));
     };
     load(1);

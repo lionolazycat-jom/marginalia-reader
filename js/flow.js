@@ -5,6 +5,7 @@
 
 import { h, debounce, clamp, throttle } from './util.js';
 import { FONTS } from './settings.js';
+import { snapshot, playTurn, clearTurn, reducedMotion } from './turn.js';
 
 export class FlowEngine {
   constructor(host, book, opts) {
@@ -89,7 +90,8 @@ export class FlowEngine {
     if (this.swiped && Date.now() - this.swiped < 400) return;
     const r = this.viewport.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width;
-    this.opts.onTap?.(x < 0.28 ? 'left' : x > 0.72 ? 'right' : 'center', e);
+    const [zl, zr] = this.opts.zones?.() || [0.28, 0.72];
+    this.opts.onTap?.(x < zl ? 'left' : x > zr ? 'right' : 'center', e);
   }
 
   // ---------- settings / layout ----------
@@ -111,7 +113,8 @@ export class FlowEngine {
     this.viewport.classList.toggle('is-scroll', this.mode === 'scroll');
     this.viewport.classList.toggle('hyphenate', !!s.hyphenate);
     this.viewport.classList.toggle('comic', !!this.book.comic);
-    this.viewport.classList.toggle('no-anim', s.pageAnim === 'none' || matchMedia('(prefers-reduced-motion: reduce)').matches);
+    this.viewport.classList.toggle('no-anim', s.pageAnim === 'none' || reducedMotion());
+    this.viewport.classList.toggle('overlay-turn', s.pageAnim === 'curl' || s.pageAnim === 'fade');
     if (this.book.lang) this.content.lang = this.book.lang;
     if (prevMode !== this.mode && this.rendered) { this.rendered = false; return this.open(loc); }
     if (this.rendered) this.relayout(loc);
@@ -404,16 +407,35 @@ export class FlowEngine {
     }
   }
 
+  /** Which effect to use right now ('none' when motion is off or the chapter is too big to copy cheaply). */
+  turnStyle() {
+    const a = this.settings.pageAnim || 'curl';
+    if (a === 'none' || reducedMotion()) return 'none';
+    if ((a === 'curl' || a === 'fade') && (this.chLens[this.ch] || 0) > 300000) return 'slide';
+    return a;
+  }
+  async turn(dir, change, crossChapter) {
+    const st = this.turnStyle();
+    const overlay = st === 'curl' || st === 'fade';
+    if (overlay) {
+      const sn = snapshot(this.frame, this.viewport);
+      await change(true);
+      playTurn(this.viewport, sn, dir, st);
+    } else {
+      await change(false);
+      if (crossChapter && st !== 'none') this.flash(dir);
+    }
+  }
   async next() {
     if (this.mode === 'scroll') { this.frame.scrollBy({ top: this.frame.clientHeight * 0.9, behavior: 'smooth' }); return; }
-    if (this.page < this.pages - 1) return this.setPage(this.page + 1);
-    if (this.ch < this.book.chapters.length - 1) { await this.showChapter(this.ch + 1); this.setPage(0, true); this.flash('next'); }
-    else this.opts.onEnd?.();
+    if (this.page < this.pages - 1) return this.turn('next', (inst) => this.setPage(this.page + 1, inst));
+    if (this.ch < this.book.chapters.length - 1) return this.turn('next', async () => { await this.showChapter(this.ch + 1); this.setPage(0, true); }, true);
+    this.opts.onEnd?.();
   }
   async prev() {
     if (this.mode === 'scroll') { this.frame.scrollBy({ top: -this.frame.clientHeight * 0.9, behavior: 'smooth' }); return; }
-    if (this.page > 0) return this.setPage(this.page - 1);
-    if (this.ch > 0) { await this.showChapter(this.ch - 1); this.setPage(this.pages - 1, true); this.flash('prev'); }
+    if (this.page > 0) return this.turn('prev', (inst) => this.setPage(this.page - 1, inst));
+    if (this.ch > 0) return this.turn('prev', async () => { await this.showChapter(this.ch - 1); this.setPage(this.pages - 1, true); }, true);
   }
   flash(dir) {
     if (this.viewport.classList.contains('no-anim')) return;

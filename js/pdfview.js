@@ -5,6 +5,7 @@
 import { h, clamp, debounce, throttle } from './util.js';
 import { getPdfjs, pdfOutline, destToPage, closePdf } from './pdfcore.js';
 import { hasSelection } from './flow.js';
+import { snapshot, playTurn, reducedMotion } from './turn.js';
 
 const MAX_RENDERED = 10;
 const MAX_CANVAS_PIXELS = 12e6;
@@ -150,7 +151,8 @@ export class PdfEngine {
     const fx = (e.clientX - vr.left) / vr.width;
     // In continuous mode the edges are for reading, not page turns.
     if (this.mode === 'scroll') { this.opts.onTap?.('center', e); return; }
-    this.opts.onTap?.(fx < 0.22 ? 'left' : fx > 0.78 ? 'right' : 'center', e);
+    const [zl, zr] = this.opts.zones?.() || [0.28, 0.72];
+    this.opts.onTap?.(fx < zl ? 'left' : fx > zr ? 'right' : 'center', e);
   }
 
   // ---------- settings ----------
@@ -405,11 +407,18 @@ export class PdfEngine {
 
   next() {
     if (this.mode === 'scroll') { this.viewport.scrollBy({ top: this.viewport.clientHeight * 0.9, behavior: 'smooth' }); return; }
-    if (this.spread < this.spreads().length - 1) this.showSpread(this.spread + 1); else this.opts.onEnd?.();
+    if (this.spread < this.spreads().length - 1) this.turn('next', () => this.showSpread(this.spread + 1)); else this.opts.onEnd?.();
   }
   prev() {
     if (this.mode === 'scroll') { this.viewport.scrollBy({ top: -this.viewport.clientHeight * 0.9, behavior: 'smooth' }); return; }
-    if (this.spread > 0) this.showSpread(this.spread - 1);
+    if (this.spread > 0) this.turn('prev', () => this.showSpread(this.spread - 1));
+  }
+  turn(dir, change) {
+    const st = this.settings.pageAnim || 'curl';
+    if (st === 'none' || reducedMotion() || !this.ready) { change(); return; }
+    const sn = snapshot(this.viewport, this.host);
+    change();
+    playTurn(this.host, sn, dir, st, this.viewport);
   }
   goToFraction(f) {
     const x = clamp(f, 0, 1) * this.n;

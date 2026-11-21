@@ -18,6 +18,10 @@ export const SHELVES = [
   { key: 'strange', label: 'Strange & gothic', books: [B(43, 'The Strange Case of Dr Jekyll and Mr Hyde', 'Robert Louis Stevenson'), B(35, 'The Time Machine', 'H. G. Wells'), B(36, 'The War of the Worlds', 'H. G. Wells'), B(1952, 'The Yellow Wallpaper', 'Charlotte Perkins Gilman'), B(932, 'The Fall of the House of Usher', 'Edgar Allan Poe'), B(219, 'Heart of Darkness', 'Joseph Conrad'), B(829, 'Gulliver’s Travels', 'Jonathan Swift'), B(1080, 'A Modest Proposal', 'Jonathan Swift')] },
   { key: 'ideas', label: 'Ideas & philosophy', books: [B(2680, 'Meditations', 'Marcus Aurelius'), B(132, 'The Art of War', 'Sun Tzu'), B(1232, 'The Prince', 'Niccolò Machiavelli'), B(1497, 'The Republic', 'Plato'), B(2500, 'Siddhartha', 'Hermann Hesse'), B(205, 'Walden', 'Henry David Thoreau'), B(4363, 'Beyond Good and Evil', 'Friedrich Nietzsche'), B(58585, 'The Prophet', 'Kahlil Gibran')] },
   { key: 'children', label: 'Children’s classics', books: [B(16, 'Peter Pan', 'J. M. Barrie'), B(55, 'The Wonderful Wizard of Oz', 'L. Frank Baum'), B(45, 'Anne of Green Gables', 'L. M. Montgomery'), B(113, 'The Secret Garden', 'Frances Hodgson Burnett'), B(236, 'The Jungle Book', 'Rudyard Kipling'), B(289, 'The Wind in the Willows', 'Kenneth Grahame'), B(12, 'Through the Looking-Glass', 'Lewis Carroll'), B(2591, 'Grimms’ Fairy Tales', 'Jacob and Wilhelm Grimm'), B(74, 'The Adventures of Tom Sawyer', 'Mark Twain'), B(76, 'Adventures of Huckleberry Finn', 'Mark Twain')] },
+  { key: 'mind', label: 'Mind, meaning & self-understanding', books: [B(621, 'The Varieties of Religious Experience', 'William James'), B(2680, 'Meditations', 'Marcus Aurelius'), B(4507, 'As a Man Thinketh', 'James Allen'), B(38219, 'The Interpretation of Dreams', 'Sigmund Freud'), B(5827, 'The Problems of Philosophy', 'Bertrand Russell'), B(3600, 'The Essays of Montaigne', 'Michel de Montaigne'), B(205, 'Walden', 'Henry David Thoreau')] },
+  { key: 'myth', label: 'Fairy tales, myths & wild stories', books: [B(2591, 'Grimms’ Fairy Tales', 'Jacob and Wilhelm Grimm'), B(1597, 'Andersen’s Fairy Tales', 'Hans Christian Andersen'), B(503, 'The Blue Fairy Book', 'Andrew Lang'), B(540, 'The Red Fairy Book', 'Andrew Lang'), B(4928, 'Bulfinch’s Mythology', 'Thomas Bulfinch'), B(21, 'Aesop’s Fables', 'Aesop')] },
+  { key: 'poetry', label: 'Poetry', books: [B(1041, 'Shakespeare’s Sonnets', 'William Shakespeare'), B(1322, 'Leaves of Grass', 'Walt Whitman'), B(12242, 'Poems', 'Emily Dickinson'), B(1065, 'The Raven', 'Edgar Allan Poe'), B(20, 'Paradise Lost', 'John Milton'), B(1001, 'Dante’s Inferno', 'Dante Alighieri')] },
+  { key: 'history', label: 'History & big ideas', books: [B(1404, 'The Federalist Papers', 'Hamilton, Madison and Jay'), B(23, 'Narrative of the Life of Frederick Douglass', 'Frederick Douglass'), B(147, 'Common Sense', 'Thomas Paine'), B(61, 'The Communist Manifesto', 'Karl Marx and Friedrich Engels'), B(2376, 'Up from Slavery', 'Booker T. Washington'), B(408, 'The Souls of Black Folk', 'W. E. B. Du Bois'), B(148, 'The Autobiography of Benjamin Franklin', 'Benjamin Franklin')] },
   { key: 'big', label: 'The big ones', books: [B(2600, 'War and Peace', 'Leo Tolstoy'), B(2554, 'Crime and Punishment', 'Fyodor Dostoyevsky'), B(135, 'Les Misérables', 'Victor Hugo'), B(996, 'Don Quixote', 'Miguel de Cervantes'), B(1727, 'The Odyssey', 'Homer'), B(766, 'David Copperfield', 'Charles Dickens'), B(4300, 'Ulysses', 'James Joyce'), B(100, 'The Complete Works of William Shakespeare', 'William Shakespeare')] },
 ];
 const CURATED = SHELVES.flatMap((s) => s.books.map((b) => ({ ...b, shelf: s.key })));
@@ -25,18 +29,18 @@ const CURATED = SHELVES.flatMap((s) => s.books.map((b) => ({ ...b, shelf: s.key 
 /** Categories: live catalogue topics, with keyword search and bundled shelves as fallbacks. */
 export const CATEGORIES = [
   { key: 'literature', label: 'Literature', topic: 'literature', query: 'fiction', shelves: ['start', 'love', 'big'] },
-  { key: 'women', label: 'Women', topic: 'women', query: 'women', shelves: ['women'] },
+  { key: 'women', label: 'Women', topic: 'women', query: 'women', shelves: ['women', 'myth'] },
   { key: 'health', label: 'Health', topic: 'health', query: 'health', shelves: [] },
-  { key: 'mind', label: 'Mind & mental health', topic: 'psychology', query: 'psychology', shelves: [] },
+  { key: 'mind', label: 'Mind & mental health', topic: 'psychology', query: 'psychology', shelves: ['mind'] },
   { key: 'classics', label: 'Classics', topic: 'classics', query: 'classics', shelves: ['start', 'big'] },
-  { key: 'philosophy', label: 'Philosophy', topic: 'philosophy', query: 'philosophy', shelves: ['ideas'] },
-  { key: 'poetry', label: 'Poetry', topic: 'poetry', query: 'poetry', shelves: [] },
+  { key: 'philosophy', label: 'Philosophy', topic: 'philosophy', query: 'philosophy', shelves: ['ideas', 'mind'] },
+  { key: 'poetry', label: 'Poetry', topic: 'poetry', query: 'poetry', shelves: ['poetry'] },
   { key: 'mystery', label: 'Mystery', topic: 'detective', query: 'detective', shelves: ['mystery'] },
   { key: 'adventure', label: 'Adventure', topic: 'adventure', query: 'adventure', shelves: ['mystery'] },
   { key: 'scifi', label: 'Science fiction', topic: 'science fiction', query: 'science fiction', shelves: ['strange'] },
-  { key: 'history', label: 'History', topic: 'history', query: 'history', shelves: [] },
+  { key: 'history', label: 'History', topic: 'history', query: 'history', shelves: ['history'] },
   { key: 'cooking', label: 'Cooking', topic: 'cooking', query: 'cooking', shelves: [] },
-  { key: 'children', label: 'Children', topic: 'children', query: 'juvenile fiction', shelves: ['children'] },
+  { key: 'children', label: 'Children', topic: 'children', query: 'juvenile fiction', shelves: ['children', 'myth'] },
 ];
 
 /** Map subject headings to the app's categories (used for your own library too). */
@@ -67,19 +71,26 @@ export const LANGUAGES = [['en', 'English'], ['fr', 'French'], ['de', 'German'],
 const mem = new Map();
 const qs = (o) => Object.entries(o).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
 
+/** fetch with a hard time limit, so a stalled server can't leave the page searching forever. */
+async function fetchT(url, ms = 7000, init = {}) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  try { return await fetch(url, { mode: 'cors', ...init, signal: ac.signal }); } finally { clearTimeout(t); }
+}
+
 async function getJson(path) {
-  // Try the catalogue directly first, then through the relay.
-  const tries = [`${GUTENDEX}${path}`, `${RELAY}/gutendex${path}`];
-  let lastErr;
-  for (const url of tries) {
-    try {
-      const r = await fetch(url, { mode: 'cors' });
-      if (r.ok) return await r.json();
-      lastErr = new Error(`The catalogue answered ${r.status}.`);
-    } catch (e) { lastErr = e; }
+  // Ask the catalogue directly and through the relay at the same time; first good answer wins.
+  const tries = [`${GUTENDEX}${path}`, `${RELAY}/gutendex${path.replace(/^\/books\/\?/, '/books?')}`];
+  try {
+    return await Promise.any(tries.map(async (url) => {
+      const r = await fetchT(url, 7000);
+      if (!r.ok || /text\/html/.test(r.headers.get('content-type') || '')) throw new Error(`The catalogue answered ${r.status}.`);
+      return r.json();
+    }));
+  } catch (e) {
+    console.warn('catalogue', e);
+    throw new Error(navigator.onLine ? 'The free-book catalogue can’t be reached right now. Try again in a moment.' : 'You’re offline. Connect to the internet to browse free books.');
   }
-  console.warn('catalogue', lastErr);
-  throw new Error(navigator.onLine ? 'The free-book catalogue can’t be reached right now. Try again in a moment.' : 'You’re offline. Connect to the internet to browse free books.');
 }
 
 function normalize(b) {
@@ -95,6 +106,22 @@ function normalize(b) {
     authors, author: authors.join(', '), cover, subjects: [...(b.subjects || []), ...(b.bookshelves || [])].map((s) => s.replace(/^Browsing:\s*/, '').replace(/ -- .*$/, '')).filter((s, i, a) => a.indexOf(s) === i).slice(0, 6),
     languages: b.languages || [], downloads: b.download_count || 0, hasEpub, hasText, summary: (b.summaries || [])[0] || '',
   };
+}
+
+/** The books that ship with the app for a category (no network needed). */
+export function localForCategory(key) {
+  const c = CATEGORIES.find((x) => x.key === key);
+  const seen = new Set();
+  return c ? CURATED.filter((b) => c.shelves.includes(b.shelf) && !seen.has(b.id) && seen.add(b.id)) : [];
+}
+
+/** A pasted Project Gutenberg link or number → a single book that can be added even when the catalogue is down. */
+export function bookFromLink(q) {
+  const m = String(q).trim().match(/^(?:https?:\/\/)?(?:www\.)?(?:gutenberg\.org\/(?:ebooks|files|cache\/epub)\/)?(\d{1,6})(?:[\/.?#].*)?$/i);
+  if (!m || (!/gutenberg/i.test(q) && !/^\d{2,6}$/.test(q.trim()))) return null;
+  const id = +m[1];
+  const known = CURATED.find((b) => b.id === id);
+  return known || B(id, `Project Gutenberg #${id}`, '');
 }
 
 /** Search the whole Project Gutenberg catalogue. Returns {books, next, count, source}. */
@@ -125,8 +152,8 @@ export async function search({ q = '', cat = null, lang = 'en', page = 1 } = {})
 async function opdsSearch(q, page) {
   const start = (page - 1) * 25 + 1;
   const url = `${RELAY}/gutenberg/ebooks/search.opds?${qs({ query: q, sort_order: 'downloads', start_index: start > 1 ? start : null })}`;
-  const r = await fetch(url, { mode: 'cors' });
-  if (!r.ok) throw new Error('opds ' + r.status);
+  const r = await fetchT(url, 7000);
+  if (!r.ok || /text\/html/.test(r.headers.get('content-type') || '')) throw new Error('opds ' + r.status);
   const xml = new DOMParser().parseFromString(await r.text(), 'application/xml');
   const books = [];
   for (const e of xml.getElementsByTagName('entry')) {

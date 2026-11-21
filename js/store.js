@@ -31,6 +31,7 @@ export async function loadAll() {
   ]);
   Object.assign(state, { books, collections, annotations, bookmarks, notes, days });
   state.reading = { ...DEFAULT_READING, ...(reading || {}) };
+  if (reading && !reading.turnV2) { state.reading.pageAnim = reading.pageAnim === 'none' ? 'none' : 'curl'; state.reading.turnV2 = true; db.kvSet('reading', state.reading).catch(() => {}); }
   state.ui = { ...DEFAULT_UI, ...(ui || {}), toolbar: { ...DEFAULT_UI.toolbar, ...((ui && ui.toolbar) || {}) } };
   // One-time: keep the toolbar showing by default (it's hard to find when it hides itself).
   if (!state.ui.toolbarShownV2) { state.ui.toolbarAutoHide = false; state.ui.toolbarShownV2 = true; db.kvSet('ui', state.ui).catch(() => {}); }

@@ -11,6 +11,7 @@ import { reflowPdf, REFLOW_VERSION } from './pdfreflow.js';
 import { db } from './db.js';
 import * as ambient from './ambient.js';
 import { openVoicePicker, toneOf } from './voices.js';
+import { TURN_STYLES, tapZones } from './turn.js';
 import { exportBookAnnotations } from './exporter.js';
 
 let current = null;
@@ -236,7 +237,8 @@ class Reader {
   engineCallbacks() {
     return {
       onRelocate: (info) => this.onRelocate(info),
-      onTap: (zone) => this.onTap(zone),
+      onTap: (zone, e) => this.onTap(zone, e),
+      zones: () => tapZones(state.ui.tapZone),
       onAnnotation: (id, rect) => this.showAnnotationPop(id, rect),
       onLink: (t, el) => this.onLink(t, el),
       onToc: () => this.refreshToc(),
@@ -328,12 +330,14 @@ class Reader {
   tuckChrome() { this.root.classList.add('chrome-hidden'); this.chromeHidden = true; this.handle?.setAttribute('aria-label', 'Show toolbar'); }
   toggleChrome() { this.chromeHidden ? (this.showChrome(true), this.hideChromeSoon(5000)) : this.tuckChrome(); }
 
-  onTap(zone) {
+  onTap(zone, e) {
     this.activity();
     if (this.closePops()) return;
     if (this.panelOpen && innerWidth < 900) { this.closePanel(); return; }
     const paged = this.isPdf ? this.engine.mode !== 'scroll' : this.engine.mode === 'paged';
-    if (zone === 'center' || !paged || !state.ui.tapToTurn) { this.toggleChrome(); return; }
+    // With half-and-half tap areas there is no middle, so the top strip of the page shows the toolbar.
+    const top = e && state.ui.tapZone === 'halves' && (e.clientY - this.stage.getBoundingClientRect().top) < 72;
+    if (zone === 'center' || top || !paged || !state.ui.tapToTurn) { this.toggleChrome(); return; }
     zone === 'left' ? this.engine.prev() : this.engine.next();
   }
 
@@ -989,6 +993,9 @@ class Reader {
       r.addEventListener('input', () => { out.textContent = fmt(+r.value); this.setSettingLive(key, +r.value); });
       return h('div.slider-row', h('label', { for: id }, label), r, out);
     };
+    const tapSeg = h('div.seg', { role: 'group', 'aria-label': 'Tap areas' }, [['edges', 'Edges'], ['thirds', 'Thirds'], ['halves', 'Halves']].map(([v, l]) => h('button', { type: 'button', class: (state.ui.tapZone || 'thirds') === v ? 'on' : '', 'aria-pressed': (state.ui.tapZone || 'thirds') === v ? 'true' : 'false', onclick: () => saveUI({ tapZone: v }).then(() => this.renderPanel()) }, h('span', l))));
+    const turnBlock = [sec('Page turn', seg('pageAnim', TURN_STYLES), h('p.hint', 'Tap the left or right of the page, or swipe, to turn it.')),
+      sec('Tap areas', toggle('Tap the page sides to turn pages', state.ui.tapToTurn, (v) => saveUI({ tapToTurn: v }).then(() => this.renderPanel())), state.ui.tapToTurn ? tapSeg : null, state.ui.tapToTurn ? h('p.hint', { 'aria-live': 'polite' }, { edges: 'Narrow strips at the sides turn the page; the rest shows the toolbar.', thirds: 'Left third goes back, right third goes forward, the middle shows the toolbar.', halves: 'Left half goes back, right half goes forward. Tap the very top to show the toolbar.' }[state.ui.tapZone || 'thirds']) : null)];
     // Themes
     const themes = h('div.theme-grid', Object.entries(THEMES).map(([k, t]) => {
       const c = k === 'custom' ? { bg: s.customBg, fg: s.customFg } : t;
@@ -1021,6 +1028,7 @@ class Reader {
       body.append(sec('Options',
         toggle('Tint pages to match theme', s.pdfTint, (v) => this.setSetting('pdfTint', v)),
         s.pdfLayout === 'double' ? toggle('Show cover page alone', s.pdfCoverAlone !== false, (v) => this.setSetting('pdfCoverAlone', v)) : null));
+      if (s.pdfLayout !== 'scroll') body.append(...turnBlock);
     } else {
       const fonts = h('div.font-list', Object.entries(FONTS).map(([k, f]) => h('button', { type: 'button', class: `font-opt ${s.font === k ? 'on' : ''}`, 'aria-pressed': s.font === k ? 'true' : 'false', dataset: { font: k }, style: { fontFamily: f.stack }, onclick: () => this.setSetting('font', k) }, h('span.font-name', f.label), h('span.font-note', f.note))));
       const num = h('input.size-input', { type: 'number', inputmode: 'numeric', min: 12, max: 40, step: 1, value: s.fontSize, 'aria-label': 'Text size in pixels' });
@@ -1048,8 +1056,8 @@ class Reader {
       body.append(sec('Options',
         toggle('Hyphenation', s.hyphenate, (v) => this.setSetting('hyphenate', v)),
         toggle('Indent paragraphs', s.indent, (v) => this.setSetting('indent', v)),
-        s.flowLayout === 'paged' ? toggle('Page turn animation', s.pageAnim !== 'none', (v) => this.setSetting('pageAnim', v ? 'slide' : 'none')) : null,
-        toggle('Tap page edges to turn pages', state.ui.tapToTurn, (v) => saveUI({ tapToTurn: v }))));
+        null));
+      if (s.flowLayout === 'paged') body.append(...turnBlock);
     }
     body.append(sec('This book', toggle('Keep these settings for this book only', !!this.book.settings, (v) => this.setPerBook(v)), h('p.hint', this.book.settings ? 'Changes here affect only this book.' : 'Changes here become your defaults for every book.')));
     const tbx = h('div.toolbar-opts', Object.entries(TOOLBAR_ITEMS).map(([k, l]) => toggle(l, state.ui.toolbar[k] !== false, (v) => saveUI({ toolbar: { ...state.ui.toolbar, [k]: v } }))));
