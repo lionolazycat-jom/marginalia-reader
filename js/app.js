@@ -490,7 +490,7 @@ VIEWS.free = (page) => {
     page.append(emptyState('Free books live in the phone app', 'This preview inside Claude can’t reach Project Gutenberg. Open the installed app to browse and add free books with one tap.', h('a.btn.btn-primary', { href: 'https://lionolazycat-jom.github.io/marginalia-reader/#free', target: '_blank', rel: 'noopener' }, 'Open the app')));
     return;
   }
-  const q = h('input#free-q.search-input', { type: 'search', placeholder: 'Search 75,000 free books by title or author', value: free.q, 'aria-label': 'Search free books', enterkeyhint: 'search' });
+  const q = h('input#free-q.search-input', { type: 'search', placeholder: 'Search free books', value: free.q, 'aria-label': 'Search free books', enterkeyhint: 'search' });
   const run = () => { free.q = q.value.trim(); if (free.q) free.cat = null; rerender(); };
   q.addEventListener('search', () => { if (!q.value && free.q) run(); });
   const lang = h('select#free-lang', { 'aria-label': 'Language' }, LANGUAGES.map(([v, l]) => h('option', { value: v, selected: free.lang === v }, l)));
@@ -587,7 +587,7 @@ async function freeDetail(b) {
 // ---------------- COLLECTIONS ----------------
 VIEWS.collections = (page) => {
   const newBtn = h('button.btn.btn-primary', { type: 'button', onclick: async () => { const r = await dialog({ title: 'New collection', fields: [{ name: 'name', label: 'Name', placeholder: 'e.g. Philosophy, Work, To read in 2027' }], actions: [{ label: 'Cancel', value: false }, { label: 'Create', value: true, primary: true }] }); if (r?.action && r.values.name.trim()) { const c = await createCollection(r.values.name); go('collection-' + c.id); } } }, icon('plus', 16), 'New collection');
-  page.append(pageHead('Collections', 'Group books any way you like. A book can be in several collections.', newBtn));
+  page.append(pageHead('Collections', 'Group books any way you like. A book can be in several collections.', state.collections.length ? newBtn : null));
   const smart = [
     ['Currently reading', state.books.filter((b) => statusOf(b) === 'reading'), () => { Object.assign(lib, { status: 'reading', format: 'all', collection: 'all', q: '' }); go('library'); }],
     ['Not started', state.books.filter((b) => statusOf(b) === 'new'), () => { Object.assign(lib, { status: 'new', format: 'all', collection: 'all', q: '' }); go('library'); }],

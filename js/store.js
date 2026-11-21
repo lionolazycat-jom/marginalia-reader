@@ -77,7 +77,7 @@ export async function importFile(file, { quiet } = {}) {
   const now = Date.now();
   const book = {
     id, hash, format,
-    title: meta.title || 'Untitled', author: meta.author || '',
+    title: meta.title || 'Untitled', author: /^(anonymous|unknown|unspecified|admin|user|author|none)$/i.test((meta.author || '').trim()) ? '' : (meta.author || ''),
     fileName: file.name, size: file.size, pages: meta.pages || null, language: meta.language || '',
     addedAt: now, lastOpenedAt: 0, progress: 0, location: null, pageLabel: '', locked: !!meta.locked,
     collections: [], finishedAt: null, readingSeconds: 0, settings: null, hasCover: !!meta.cover, indexed: false,

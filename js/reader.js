@@ -511,7 +511,6 @@ class Reader {
         if (this.panelOpen) { this.closePanel(); return; }
         if (this.tts?.active) { this.tts.stop(); return; }
         if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
-        this.toggleChrome();
         break;
       default:
     }
@@ -1280,7 +1279,7 @@ class Speaker {
       voice.textContent = v ? v.name.replace(/^(Microsoft|Google)\s+/i, '') : 'Voice…';
     };
     this.renderVoices();
-    const sleepOpts = [['off', 'Sleep timer'], ['10', '10 min'], ['20', '20 min'], ['30', '30 min'], ['45', '45 min'], ['60', '1 hour'], ['chapter', 'End of chapter']];
+    const sleepOpts = [['off', 'Timer'], ['10', '10 min'], ['20', '20 min'], ['30', '30 min'], ['45', '45 min'], ['60', '1 hour'], ['chapter', 'End of chapter']];
     this.sleepSel = h('select.tts-sleep', { 'aria-label': 'Sleep timer' }, sleepOpts.map(([v, l]) => h('option', { value: v, dataset: { label: l } }, l)));
     this.sleepSel.addEventListener('change', () => this.setSleep(this.sleepSel.value));
     const styleSel = h('select.tts-style', { 'aria-label': 'Reading style' }, Object.entries(VOICE_STYLES).map(([k, v]) => h('option', { value: k, selected: (state.ui.ttsStyle || 'natural') === k }, v.label)));

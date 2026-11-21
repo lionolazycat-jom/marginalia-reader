@@ -62,7 +62,7 @@ export const DEFAULT_READING = {
   align: 'justify',
   fontWeight: 400,
   margin: 40,
-  vMargin: 44,
+  vMargin: 60,
   maxWidth: 680,
   spread: 'auto',
   flowLayout: 'paged',

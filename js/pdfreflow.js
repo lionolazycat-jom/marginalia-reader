@@ -5,7 +5,7 @@
 
 import { pdfOutline } from './pdfcore.js';
 
-export const REFLOW_VERSION = 4;
+export const REFLOW_VERSION = 5;
 
 const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
 const median = (a) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[s.length >> 1]; };
@@ -69,8 +69,9 @@ export async function reflowPdf(doc, onProgress, signal, opts = {}) {
       // When chapters come from headings, the next chapter's heading starts it.
       if (starts[ci + 1]?.block === b) break;
       if (b.page !== lastPage) { parts.push(`<span class="pdf-pg" id="c${ci}-pg${b.page}" data-p="${b.page}"></span>`); lastPage = b.page; }
-      if (b.type === 'h') { const lv = Math.min(4, Math.max(2, b.level + 1)); parts.push(`<h${lv}>${esc(b.text)}</h${lv}>`); }
-      else parts.push(`<p${b.small ? ' class="x-small"' : ''}>${esc(b.text)}</p>`);
+      if (b.type === 'h') { const lv = Math.min(4, Math.max(2, b.level + 1)); parts.push(`<h${lv}>${esc(typo(b.text))}</h${lv}>`); }
+      else if (b.type === 'toc') parts.push(`<p class="x-toc"><span class="t">${esc(typo(b.title))}</span><span class="n">${esc(b.num)}</span></p>`);
+      else parts.push(`<p${b.small ? ' class="x-small"' : ''}>${esc(typo(b.text))}</p>`);
       bi++;
     }
     for (let p = starts[ci].page; p < end; p++) pageToChapter[p] = chapters.length;
@@ -110,6 +111,8 @@ function buildBlocks(pages, body, level, mode) {
     const lineGap = median(gaps) || body * 1.25;
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i], prev = lines[i - 1];
+      const toc = tocParts(l.text);
+      if (toc) { flush(); blocks.push({ type: 'toc', title: toc.title, num: toc.num, text: toc.title, page: pi, size: l.size }); continue; }
       const isHead = l.size >= body * 1.18 && l.text.length < 140 && !/[.,;]$/.test(l.text) ? level(l.size) || 3
         : (l.bold && l.text.length < 90 && !/[.,;:]$/.test(l.text) && (!prev || prev.y - l.y > lineGap * 1.3) && (!lines[i + 1] || l.y - lines[i + 1].y > lineGap * 1.3) && /^[\p{Lu}\d]/u.test(l.text) ? 4 : 0);
       if (isHead) {
@@ -151,6 +154,23 @@ function fragmented(blocks) {
   const med = lens[lens.length >> 1];
   const tiny = lens.filter((n) => n < 90).length / lens.length;
   return med < 150 || tiny > 0.45;
+}
+
+const LEADER = /(?:\.\s?){4,}|…{2,}|(?:·\s?){4,}/;
+const hasLeader = (items) => items.some((it) => LEADER.test(it.str));
+
+/** Table-of-contents line ("Chapter one ........ 14") → {title, num}, or null. */
+function tocParts(text) {
+  const m = text.match(/^(.{2,}?)\s*(?:(?:\.\s?){4,}|…{2,}|(?:·\s?){4,})\s*([\divxlcIVXLC]{1,6})$/);
+  return m ? { title: m[1].trim(), num: m[2] } : null;
+}
+
+/** Straight quotes and dashes → typographic ones. */
+function typo(t) {
+  return t
+    .replace(/(^|[\s(\[{\u2014\u2013-])"/g, '$1\u201C').replace(/"/g, '\u201D')
+    .replace(/(^|[\s(\[{\u2014\u2013\u201C-])'/g, '$1\u2018').replace(/'/g, '\u2019')
+    .replace(/\s--\s/g, ' \u2014 ');
 }
 
 function joinLines(a, b) {
@@ -213,14 +233,14 @@ function toLines(tc, vp) {
   let lines = [];
   if (gutter == null) {
     // Single column: only a very wide gap (table cells, tab stops) breaks a line; justified spacing never does.
-    for (const R of rows) lines.push(...build(R.items, R.y, 4.5));
+    for (const R of rows) lines.push(...build(R.items, R.y, hasLeader(R.items) ? 999 : 4.5));
   } else {
     // Read each column top to bottom, with full-width lines (titles) where they fall.
     let leftCol = [], rightCol = [];
     const flushCols = () => { lines.push(...leftCol, ...rightCol); leftCol = []; rightCol = []; };
     for (const R of rows) {
       const crosses = R.items.some((it) => it.x < gutter - 1 && it.x + it.w > gutter + 1);
-      if (crosses) { flushCols(); lines.push(...build(R.items, R.y, 4.5)); continue; }
+      if (crosses) { flushCols(); lines.push(...build(R.items, R.y, hasLeader(R.items) ? 999 : 4.5)); continue; }
       leftCol.push(...build(R.items.filter((it) => it.x + it.w / 2 < gutter), R.y, 4.5));
       rightCol.push(...build(R.items.filter((it) => it.x + it.w / 2 >= gutter), R.y, 4.5));
     }
