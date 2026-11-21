@@ -81,11 +81,11 @@ class Reader {
       if (this.isPdfBook) {
         const doc = await openPdf(blob, (retry) => this.askPassword(retry));
         if (this.book.locked) updateBook(this.book, { locked: false, pages: doc.numPages });
-        // Book view is only offered for plain, text-first PDFs; designed ones stay as the original pages.
+        // The Book / Original switch is always there for PDFs. Designed PDFs simply open as the original pages.
         if (this.book.plainPdf == null) { this.book.plainPdf = await pdfLooksPlain(doc); updateBook(this.book, { plainPdf: this.book.plainPdf }); }
-        this.canBookView = !!this.book.plainPdf;
+        this.canBookView = true;
         this.updateViewBtn();
-        if (!this.canBookView) { this.view = 'original'; this.opts.loc = this.opts.loc?.ch != null ? null : this.opts.loc; if (this.book.pdfView === 'book') updateBook(this.book, { pdfView: 'original' }); }
+        if (!this.book.plainPdf && !this.opts.view && !this.book.pdfView && this.opts.loc?.ch == null) { this.view = 'original'; }
         else {
           if (this.opts.loc) this.view = this.opts.loc.ch != null ? 'book' : 'original';
           else this.view = this.opts.view || this.book.pdfView || null;
@@ -306,8 +306,8 @@ class Reader {
     this.sizeDownBtn = h('button.rd-pill.rd-size', { type: 'button', 'aria-label': 'Smaller text', title: 'Smaller text (-)', onclick: () => this.bumpSize(-1) }, h('span', { style: { fontSize: '13px' } }, 'A'), h('span.rd-minus', '\u2212'));
     this.sizeUpBtn = h('button.rd-pill.rd-size', { type: 'button', 'aria-label': 'Larger text', title: 'Larger text (+)', onclick: () => this.bumpSize(1) }, h('span', { style: { fontSize: '20px' } }, 'A'), h('span.rd-minus', '+'));
     this.spreadBtn = h('button.rd-pill.rd-spread', { type: 'button', onclick: () => this.toggleSpread() });
-    this.textRow = h('div.rd-textrow', { role: 'toolbar', 'aria-label': 'Text and view' }, this.sizeDownBtn, this.sizeUpBtn, this.viewBtn, this.spreadBtn, this.displayBtn);
-    this.toolsEl = h('div.rd-tools', ...Object.values(this.tools).slice(0, 6), this.bookmarkBtn, this.captureBtn, this.fsBtn, this.moreBtn);
+    this.textRow = h('div.rd-textrow', { role: 'toolbar', 'aria-label': 'Text and view' }, this.sizeDownBtn, this.sizeUpBtn, this.spreadBtn, this.displayBtn);
+    this.toolsEl = h('div.rd-tools', this.viewBtn, ...Object.values(this.tools).slice(0, 6), this.bookmarkBtn, this.captureBtn, this.fsBtn, this.moreBtn);
     this.top = h('header.rd-top', { role: 'toolbar', 'aria-label': 'Reading tools' },
       iconBtn('back', 'Back to library', () => this.close(), { class: 'rd-btn rd-back' }),
       this.titleEl,

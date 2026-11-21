@@ -971,7 +971,6 @@ body.is-reading .app { visibility: hidden; }
 .rd-textrow .rd-btn.rd-display { margin-left: auto; }
 .rd-textrow .rd-btn.rd-viewtoggle[hidden] { display: none; }
 .rd-textrow .rd-btn.panel-active { color: var(--accent); }
-.rd-top .rd-btn.rd-viewtoggle, .rd-top .rd-btn.rd-display { display: none; }
 @media (max-width: 380px) { .rd-textrow .rd-btn.rd-viewtoggle .rd-lbl { display: inline; } .rd-textrow .rd-btn.rd-viewtoggle { width: auto; padding: 0 12px; } }
 
 /* Pull tab: sits on the top edge of the bottom bar; pull it down to tuck the bars away, pull it up to bring them back */
@@ -989,3 +988,7 @@ body.is-reading .app { visibility: hidden; }
   .rd-textrow .rd-btn.rd-display { width: 36px; padding: 0; margin-left: auto; }
   .rd-textrow .rd-btn.rd-display .rd-lbl { display: none; }
 }
+
+/* Book / Original switch: always visible in the top bar for PDFs */
+.rd-top .rd-btn.rd-viewtoggle:not([hidden]) { display: inline-flex !important; width: auto; padding: 0 12px; gap: 6px; }
+.rd-top .rd-btn.rd-viewtoggle .rd-lbl { display: inline !important; font: 600 13px/1 var(--ui, system-ui); }
