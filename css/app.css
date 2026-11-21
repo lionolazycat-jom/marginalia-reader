@@ -863,3 +863,12 @@ body.is-reading .app { visibility: hidden; }
 .reader.chrome-hidden .rd-handle { top: 0; opacity: .8; }
 .reader.chrome-hidden .rd-handle svg { transform: none; }
 .reader.chrome-hidden .rd-handle:hover { opacity: 1; }
+
+.size-row { display: flex; align-items: center; gap: 10px; }
+.size-row .size-range { flex: 1; min-width: 0; accent-color: var(--accent); }
+.size-input { width: 56px; padding: 6px 8px; border: 1px solid var(--rd-line); border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: center; }
+.size-unit { color: var(--rd-muted); font-size: 12px; margin-left: -4px; }
+.size-row { border: 0; padding: 2px 0; }
+.size-row .size-btn { flex: 0 0 40px; height: 40px; border: 1px solid var(--rd-line); border-radius: 10px; }
+/* Phone held sideways: slimmer side panel so the pages stay visible while you adjust */
+@media (max-height: 520px) and (orientation: landscape) { .rd-panel { width: min(330px, 42vw); } }

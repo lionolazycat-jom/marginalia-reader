@@ -1025,10 +1025,16 @@ class Reader {
         s.pdfLayout === 'double' ? toggle('Show cover page alone', s.pdfCoverAlone !== false, (v) => this.setSetting('pdfCoverAlone', v)) : null));
     } else {
       const fonts = h('div.font-list', Object.entries(FONTS).map(([k, f]) => h('button', { type: 'button', class: `font-opt ${s.font === k ? 'on' : ''}`, 'aria-pressed': s.font === k ? 'true' : 'false', dataset: { font: k }, style: { fontFamily: f.stack }, onclick: () => this.setSetting('font', k) }, h('span.font-name', f.label), h('span.font-note', f.note))));
+      const num = h('input.size-input', { type: 'number', inputmode: 'numeric', min: 12, max: 40, step: 1, value: s.fontSize, 'aria-label': 'Text size in pixels' });
+      num.addEventListener('change', () => this.setSetting('fontSize', clamp(Math.round(+num.value) || s.fontSize, 12, 40)));
+      const rng = h('input.size-range', { type: 'range', min: 12, max: 40, step: 1, value: s.fontSize, 'aria-label': 'Text size' });
+      rng.addEventListener('input', () => { num.value = rng.value; this.setSettingLive('fontSize', +rng.value); });
+      rng.addEventListener('change', () => this.setSetting('fontSize', +rng.value));
       const size = h('div.size-row',
         h('button.size-btn', { type: 'button', 'aria-label': 'Smaller text', onclick: () => this.bumpSize(-1) }, h('span', { style: { fontSize: '14px' } }, 'A')),
-        h('span.size-val', `${s.fontSize}px`),
-        h('button.size-btn', { type: 'button', 'aria-label': 'Larger text', onclick: () => this.bumpSize(1) }, h('span', { style: { fontSize: '22px' } }, 'A')));
+        rng,
+        h('button.size-btn', { type: 'button', 'aria-label': 'Larger text', onclick: () => this.bumpSize(1) }, h('span', { style: { fontSize: '22px' } }, 'A')),
+        num, h('span.size-unit', 'px'));
       body.append(sec('Text', size, fonts));
       body.append(sec('Spacing',
         slider('lineHeight', 'Line spacing', 1.1, 2.4, 0.05, (v) => v.toFixed(2)),
@@ -1071,7 +1077,8 @@ class Reader {
     for (const b of $$('.seg button[data-key]', this.panel)) { const on = String(s[b.dataset.key]) === b.dataset.v; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
     for (const b of $$('.theme-sw', this.panel)) b.classList.toggle('on', b.dataset.theme === s.theme);
     for (const b of $$('.font-opt', this.panel)) b.classList.toggle('on', b.dataset.font === s.font);
-    const sv = $('.size-val', this.panel); if (sv) sv.textContent = `${s.fontSize}px`;
+    const sv = $('.size-input', this.panel); if (sv && document.activeElement !== sv) sv.value = s.fontSize;
+    const sr = $('.size-range', this.panel); if (sr) sr.value = s.fontSize;
     this.updateZoomLabel();
     // Some sections depend on values (custom colors, spreads): rebuild when they change.
     const sig = this.dispSignature();

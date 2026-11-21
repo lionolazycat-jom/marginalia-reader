@@ -128,7 +128,7 @@ export class FlowEngine {
     if (this.mode === 'paged' && !this.book.comic) {
       // Two columns need about 270px each to stay readable (a phone held sideways qualifies).
       if (s.spread === 'double') n = vw >= 560 ? 2 : 1;
-      else if (s.spread === 'auto') n = avail > measure * 1.55 && vw > vh * 1.05 ? 2 : 1;
+      else if (s.spread === 'auto') n = vw > vh * 1.05 && vw >= 560 ? 2 : 1;   // any screen held sideways gets two pages
     }
     const gap = n === 2 ? Math.max(48, margin * 1.5) : margin * 2;
     const width = this.mode === 'scroll' ? Math.min(avail, measure) : Math.min(avail, n * measure + (n - 1) * gap);
