@@ -819,7 +819,7 @@ body.is-reading .app { visibility: hidden; }
 .s-fire { --art: radial-gradient(40% 70% at 50% 100%, #ffd27a, transparent 70%), radial-gradient(70% 90% at 50% 100%, #e36a2c, transparent 72%), linear-gradient(180deg, #2a1a14, #4a2618); }
 .s-night { --art: radial-gradient(2px 2px at 20% 30%, #fff, transparent), radial-gradient(2px 2px at 70% 20%, #fff, transparent), radial-gradient(1.5px 1.5px at 45% 55%, #fff, transparent), radial-gradient(18px 18px at 82% 30%, #f2ecd3 45%, transparent 50%), linear-gradient(180deg, #121a33, #26345a); }
 .s-lofi { --art: repeating-linear-gradient(90deg, rgb(255 255 255 / .0) 0 10px, rgb(255 255 255 / .22) 10px 13px), linear-gradient(135deg, #b86a8a, #5b4b8a); }
-@media (max-width: 480px) { .rd-tools .rd-sounds, .rd-tools .rd-viewtoggle { display: none; } }
+@media (max-width: 480px) { .rd-tools .rd-sounds { display: none; } .rd-title { min-width: 0; } .rd-tools .rd-btn { width: 38px; } }
 .style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .style-opt { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
 .style-opt strong { font-size: 14px; }

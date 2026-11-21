@@ -81,7 +81,7 @@ export const DEFAULT_UI = {
   customAccent: '',
   libraryView: 'grid',
   librarySort: 'opened',
-  toolbarAutoHide: true,
+  toolbarAutoHide: false,
   toolbar: Object.fromEntries(Object.keys(TOOLBAR_ITEMS).map((k) => [k, true])),
   goalMinutes: 20,
   goalBooks: 12,

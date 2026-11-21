@@ -32,6 +32,8 @@ export async function loadAll() {
   Object.assign(state, { books, collections, annotations, bookmarks, notes, days });
   state.reading = { ...DEFAULT_READING, ...(reading || {}) };
   state.ui = { ...DEFAULT_UI, ...(ui || {}), toolbar: { ...DEFAULT_UI.toolbar, ...((ui && ui.toolbar) || {}) } };
+  // One-time: keep the toolbar showing by default (it's hard to find when it hides itself).
+  if (!state.ui.toolbarShownV2) { state.ui.toolbarAutoHide = false; state.ui.toolbarShownV2 = true; db.kvSet('ui', state.ui).catch(() => {}); }
 }
 
 export const bookById = (id) => state.books.find((b) => b.id === id);

@@ -776,9 +776,7 @@ class Reader {
 
   // ---------------- settings ----------------
   async setSetting(key, value) {
-    if (key === 'spread' && value === 'double' && !this.isPdf && this.root.clientWidth < 560) {
-      toast('Two pages needs a wider screen. Turn your phone sideways to see them.', { ms: 5000 });
-    }
+    
     if (this.book.settings) {
       this.book.settings = { ...this.book.settings, [key]: value };
       await updateBook(this.book, { settings: this.book.settings });
