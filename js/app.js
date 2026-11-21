@@ -484,7 +484,7 @@ async function addBooksToCollection(c) {
 const free = { q: '', cat: null, lang: 'en' };
 
 VIEWS.free = (page) => {
-  page.append(pageHead('Free books', 'Classics from Project Gutenberg: free, legal and yours to keep. Added books work offline like any other.'));
+  page.append(pageHead('Free books', 'Classics from Project Gutenberg and the Internet Archive: free, legal and yours to keep. Added books work offline like any other.'));
   let framed = false; try { framed = window.self !== window.top; } catch { framed = true; }
   if (framed) {
     page.append(emptyState('Free books live in the phone app', 'This preview inside Claude can’t reach Project Gutenberg. Open the installed app to browse and add free books with one tap.', h('a.btn.btn-primary', { href: 'https://lionolazycat-jom.github.io/marginalia-reader/#free', target: '_blank', rel: 'noopener' }, 'Open the app')));
@@ -511,7 +511,8 @@ VIEWS.free = (page) => {
     const grid = h('div.book-grid.free-grid');
     const more = h('div.row.center');
     box.append(note, grid, more);
-    const addCards = (books) => { const have = new Set([...grid.children].map((c) => c.dataset.id)); for (const b of books) if (!have.has(String(b.id))) { const el = freeCard(b); el.dataset.id = b.id; grid.append(el); } };
+    const nt = (b) => (b.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const addCards = (books) => { const have = new Set([...grid.children].map((c) => c.dataset.id)); const titles = new Set([...grid.children].map((c) => c.dataset.t)); for (const b of books) if (!have.has(String(b.id)) && !titles.has(nt(b))) { const el = freeCard(b); el.dataset.id = b.id; el.dataset.t = nt(b); grid.append(el); titles.add(nt(b)); } };
     const retry = () => { grid.replaceChildren(); load(1); };
     const unavailableNote = (hasLocal) => h('div.hint-row', h('p.hint', hasLocal ? 'The full Gutenberg catalogue isn’t answering right now (it’s down for maintenance), so this shows the books that come with the app.' : 'The full Gutenberg catalogue isn’t answering right now (it’s down for maintenance) and the app has no saved books for this yet.'), h('button.btn', { type: 'button', onclick: retry }, 'Try again'));
     const load = async (pg) => {
@@ -564,10 +565,10 @@ async function freeDetail(b) {
     freeCover(b, 'free-detail-cover'),
     h('div',
       b.author ? h('p.free-author', b.author) : null,
-      b.downloads ? h('p.muted', `${b.downloads.toLocaleString()} downloads in the last month · ${b.languages.map((l) => LANGUAGES.find(([v]) => v === l)?.[1] || l).join(', ')}`) : h('p.muted', 'Project Gutenberg · EPUB'),
+      b.downloads ? h('p.muted', `${b.downloads.toLocaleString()} downloads in the last month · ${b.languages.map((l) => LANGUAGES.find(([v]) => v === l)?.[1] || l).join(', ')}`) : h('p.muted', b.from ? `${b.from} · Internet Archive` : 'Project Gutenberg · EPUB'),
       b.summary ? h('p.free-summary', b.summary.length > 420 ? b.summary.slice(0, 420).replace(/\s\S*$/, '') + '…' : b.summary) : null,
       b.subjects.length ? h('div.chips', b.subjects.slice(0, 5).map((s) => h('span.chip.static', s))) : null,
-      h('a.link.small', { href: gutenbergPage(b.id), target: '_blank', rel: 'noopener noreferrer' }, 'View on Project Gutenberg')));
+      h('a.link.small', { href: b.page || gutenbergPage(b.id), target: '_blank', rel: 'noopener noreferrer' }, b.page ? 'View on Internet Archive' : 'View on Project Gutenberg')));
   const r = await dialog({ title: b.title, body, wide: true, actions: [{ label: 'Close', value: false }, owned ? { label: 'Open book', value: 'open', primary: true } : { label: 'Add to library', value: 'add', primary: true }] });
   if (r === 'open') { openBook(owned); return; }
   if (r !== 'add') return;
@@ -579,7 +580,7 @@ async function freeDetail(b) {
     const res = await importFile(file);
     const norm = (x) => (x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').slice(0, 2).join(' ');
     if (norm(res.book.title) && norm(b.title) && !norm(res.book.title).includes(norm(b.title).split(' ')[0]) && !norm(b.title).includes(norm(res.book.title).split(' ')[0])) {
-      toast(`Note: Project Gutenberg sent “${res.book.title}”.`, { ms: 7000 });
+      toast(`Note: the file is titled “${res.book.title}”.`, { ms: 7000 });
     }
     const patch = { source: `gutenberg:${b.id}`, categories: categorize([...(b.subjects || []), ...(res.book.subjects || [])], [...(res.book.categories || []), ...(free.cat ? [free.cat] : []), 'classics']) };
     if (b.author && !res.book.author) patch.author = b.author;

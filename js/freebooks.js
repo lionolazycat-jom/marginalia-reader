@@ -139,14 +139,35 @@ export async function search({ q = '', cat = null, lang = 'en', page = 1 } = {})
   if (!out) {
     try { out = await opdsSearch(c ? c.query : q, page); } catch {}
   }
+  // 3) Open Library / Internet Archive: a second, independent catalogue of free-to-read books
+  if (!out) {
+    try { out = await openLibrarySearch(c ? { topic: c.topic } : { q }, lang, page); } catch (e) { console.warn('openlibrary', e); }
+    if (out && !out.books.length) out = null;
+  }
   if (out) { mem.set(key, out); db.kvSet(key, { at: Date.now(), out }).catch(() => {}); return out; }
   const cached = await db.kvGet(key).catch(() => null);
   if (cached) return { ...cached.out, offline: true };
-  // 3) Offline: search the shelves that ship with the app
+  // 4) Offline: search the shelves that ship with the app
   const needle = q.toLowerCase();
   const seen = new Set();
   const local = CURATED.filter((b) => (c ? c.shelves.includes(b.shelf) : (b.title + ' ' + b.author).toLowerCase().includes(needle)) && !seen.has(b.id) && seen.add(b.id));
   return { books: local, next: null, count: local.length, source: 'shelves', unavailable: true };
+}
+
+const OL_LANG = { en: 'eng', fr: 'fre', de: 'ger', es: 'spa', it: 'ita', pt: 'por', nl: 'dut', fi: 'fin', zh: 'chi', tl: 'tgl' };
+/** Open Library search, limited to books that can be read and downloaded for free. */
+async function openLibrarySearch({ q, topic }, lang, page) {
+  const url = `https://openlibrary.org/search.json?${qs({ q: topic ? null : q, subject: topic || null, has_fulltext: 'true', ebook_access: 'public', language: OL_LANG[lang] || 'eng', fields: 'key,title,author_name,cover_i,ia,first_publish_year,subject', limit: 24, page: page > 1 ? page : null, sort: topic ? 'readinglog' : null })}`;
+  const r = await fetchT(url, 8000);
+  if (!r.ok) throw new Error('openlibrary ' + r.status);
+  const data = await r.json();
+  const books = (data.docs || []).filter((d) => Array.isArray(d.ia) && d.ia.length && d.title).map((d) => ({
+    id: 'ia:' + d.ia[0], ia: d.ia[0], title: d.title, author: (d.author_name || [])[0] || '', authors: d.author_name || [],
+    cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : '', subjects: (d.subject || []).slice(0, 8), languages: [lang],
+    downloads: 0, hasEpub: true, summary: '', from: 'Open Library', page: `https://archive.org/details/${d.ia[0]}`,
+  }));
+  const total = data.numFound || 0;
+  return { books, next: page * 24 < total ? page + 1 : null, count: total, source: 'openlibrary' };
 }
 
 async function opdsSearch(q, page) {
@@ -169,7 +190,31 @@ async function opdsSearch(q, page) {
 }
 
 /** Download a book's EPUB through the relay. Returns a File. */
+async function readBlob(r, type, onProgress) {
+  const total = +r.headers.get('content-length') || 0;
+  const reader = r.body?.getReader?.();
+  if (!reader) return r.blob();
+  const chunks = []; let got = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; onProgress?.(total ? got / total : null); }
+  return new Blob(chunks, { type });
+}
+
+/** Internet Archive books: try an EPUB first, then the PDF scan. */
+async function downloadArchive(book, onProgress) {
+  const safe = `${book.title}${book.author ? ' - ' + book.author : ''}`.replace(/[\\/:*?"<>|]+/g, '').slice(0, 90);
+  for (const [ext, type] of [['epub', 'application/epub+zip'], ['pdf', 'application/pdf']]) {
+    let r;
+    try { r = await fetch(`https://archive.org/download/${book.ia}/${book.ia}.${ext}`, { mode: 'cors' }); }
+    catch { throw new Error(navigator.onLine ? 'The Internet Archive didn’t answer. Try again in a moment, or open the book on archive.org.' : 'You’re offline. Connect to the internet to download books.'); }
+    if (!r.ok || /text\/html/.test(r.headers.get('content-type') || '')) continue;
+    const blob = await readBlob(r, type, onProgress);
+    if (blob.size > 1000) return new File([blob], `${safe}.${ext}`, { type });
+  }
+  throw new Error('This book can’t be downloaded from the Internet Archive. Use “View on Internet Archive” to read it there.');
+}
+
 export async function downloadBook(book, onProgress) {
+  if (book.ia) return downloadArchive(book, onProgress);
   const id = book.id;
   const files = [`pg${id}-images-3.epub`, `pg${id}-images.epub`, `pg${id}.epub`];
   // The aleph mirror stays up when the main site is under maintenance.
