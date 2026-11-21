@@ -96,7 +96,7 @@ export async function updateBook(book, patch) {
 }
 
 export async function removeBook(id) {
-  await Promise.all([db.del('books', id), db.del('files', id), db.del('covers', id), db.del('texts', id), db.delWhere('annotations', 'bookId', id), db.delWhere('bookmarks', 'bookId', id)]);
+  await Promise.all([db.del('books', id), db.del('files', id), db.del('covers', id), db.del('texts', id), db.del('reflow', id), db.delWhere('annotations', 'bookId', id), db.delWhere('bookmarks', 'bookId', id)]);
   state.books = state.books.filter((b) => b.id !== id);
   state.annotations = state.annotations.filter((a) => a.bookId !== id);
   state.bookmarks = state.bookmarks.filter((a) => a.bookId !== id);
@@ -295,7 +295,7 @@ export async function importBackup(text) {
 }
 
 export async function clearEverything() {
-  for (const s of ['books', 'files', 'covers', 'texts', 'annotations', 'bookmarks', 'notes', 'collections', 'days', 'kv']) await db.clear(s);
+  for (const s of ['books', 'files', 'covers', 'texts', 'reflow', 'annotations', 'bookmarks', 'notes', 'collections', 'days', 'kv']) await db.clear(s);
   for (const u of state.coverUrls.values()) u.then((x) => x && URL.revokeObjectURL(x));
   Object.assign(state, { books: [], collections: [], annotations: [], bookmarks: [], notes: [], days: [], reading: { ...DEFAULT_READING }, ui: { ...DEFAULT_UI }, coverUrls: new Map() });
   emit('change');

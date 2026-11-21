@@ -64,7 +64,7 @@ export async function readMeta(file, format) {
       const info = md?.info || {};
       const t = (info.Title || md?.metadata?.get?.('dc:title') || '').trim();
       const a = (info.Author || md?.metadata?.get?.('dc:creator') || '').trim();
-      if (t && t.length > 2 && !/^(untitled|microsoft word|document\d*|\w+\.(docx?|pdf))/i.test(t)) base.title = t;
+      if (t && t.length > 2 && !/^(untitled|about:blank|microsoft word|document\d*|\w+\.(docx?|pdf|html?)|https?:)/i.test(t)) base.title = t;
       if (a) base.author = a;
       base.pages = doc.numPages;
       try { base.cover = await renderThumb(doc); } catch {}

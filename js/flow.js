@@ -601,7 +601,7 @@ export class FlowEngine {
       const text = m[0].trim();
       if (text.length < 1 || !/[\p{L}\p{N}]/u.test(text)) continue;
       const lead = m[0].length - m[0].trimStart().length;
-      out.push({ text, loc: { ch: loc.ch, off: s + lead }, end: e });
+      out.push({ text, loc: { ch: loc.ch, off: s + lead }, end: e, para: m[0].endsWith('\n') || t[e] === '\n' });
       if (out.length > 400) break;
     }
     return out;

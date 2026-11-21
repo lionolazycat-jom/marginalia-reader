@@ -5,7 +5,7 @@ import { db, persistent, storageEstimate, requestPersistence } from './db.js';
 import { state, on, loadAll, importFile, updateBook, removeBook, coverUrl, bookById, createCollection, renameCollection, deleteCollection, setBookCollections, updateAnnotation, deleteAnnotation, restoreAnnotation, updateBookmark, deleteBookmark, addBookmark, saveNote, deleteNote, saveUI, streak, todaySeconds, exportBackup, importBackup, clearEverything, searchContent, queueIndex } from './store.js';
 import { ACCEPT, FORMAT_LABEL } from './formats.js';
 import { HL_COLORS, ACCENTS } from './settings.js';
-import { openReader, activeReader, showShortcuts, listVoices, sortVoices } from './reader.js';
+import { openReader, activeReader, showShortcuts, listVoices, sortVoices, VOICE_STYLES } from './reader.js';
 import { installState, promptInstall, onInstallChange, initPwa } from './pwa.js';
 import { exportAnnotationList, report, safeName } from './exporter.js';
 import { WELCOME_MD } from './welcome.js';
@@ -717,13 +717,14 @@ VIEWS.preferences = async (page) => {
     const pitchOut = h('output', { for: 'tts-pitch-pref' }, (ui.ttsPitch || 1).toFixed(2));
     pitchIn.addEventListener('input', () => { pitchOut.textContent = (+pitchIn.value).toFixed(2); });
     pitchIn.addEventListener('change', () => saveUI({ ttsPitch: +pitchIn.value }));
-    const test = h('button.btn', { type: 'button', onclick: () => {
+    const test = h('button#tts-test.btn', { type: 'button', onclick: () => {
       try {
         speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance('The lamp was lit, the page was turned, and the evening grew quiet.');
         const v = listVoices().find((x) => x.voiceURI === voiceSel.value) || sortVoices(listVoices())[0];
         if (v) { u.voice = v; u.lang = v.lang; }
-        u.rate = +rateIn.value; u.pitch = +pitchIn.value;
+        const st = VOICE_STYLES[state.ui.ttsStyle] || VOICE_STYLES.natural;
+        u.rate = +rateIn.value * st.rate; u.pitch = +pitchIn.value * st.pitch;
         speechSynthesis.speak(u);
       } catch { toast('This device can’t play speech right now.'); }
     } }, icon('play', 16), 'Test voice');
@@ -731,6 +732,7 @@ VIEWS.preferences = async (page) => {
     page.append(h('section.card.pref', h('h2', 'Read aloud'),
       h('p', 'Books are read by your device’s own voices, sentence by sentence, with the current word highlighted when the voice supports it. It works offline and keeps the screen on while it plays.'),
       h('div.pref-row', h('label', { for: 'tts-voice-pref' }, 'Voice'), voiceSel),
+      h('div.style-grid', { role: 'group', 'aria-label': 'Reading style' }, Object.entries(VOICE_STYLES).map(([k, v]) => h('button', { type: 'button', class: `style-opt ${(ui.ttsStyle || 'natural') === k ? 'on' : ''}`, 'aria-pressed': (ui.ttsStyle || 'natural') === k ? 'true' : 'false', onclick: () => saveUI({ ttsStyle: k }).then(() => { rerender(); setTimeout(() => document.querySelector('#tts-test')?.click(), 50); }) }, h('strong', v.label), h('span', v.note)))),
       h('div.slider-row.pref-slider', h('label', { for: 'tts-rate-pref' }, 'Speed'), rateIn, rateOut),
       h('div.slider-row.pref-slider', h('label', { for: 'tts-pitch-pref' }, 'Pitch'), pitchIn, pitchOut),
       h('div.row', test),

@@ -44,6 +44,7 @@ export const TOOLBAR_ITEMS = {
   search: 'Search in book',
   display: 'Display settings',
   tts: 'Read aloud',
+  sounds: 'Background sounds',
   annotations: 'Highlights & notes',
   bookmark: 'Bookmark',
   fullscreen: 'Full screen',
@@ -87,6 +88,9 @@ export const DEFAULT_UI = {
   translateTo: 'English',
   ttsRate: 1,
   ttsVoice: '',
+  ttsStyle: 'natural',
+  sounds: {},
+  soundsMaster: 0.8,
   tapToTurn: true,
 };
 

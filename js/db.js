@@ -2,12 +2,13 @@
 // Falls back to an in-memory store (with a visible warning) when IndexedDB is unavailable.
 
 const DB_NAME = 'marginalia';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORES = {
   books: { keyPath: 'id' },
   files: { keyPath: 'id' },
   covers: { keyPath: 'id' },
   texts: { keyPath: 'id' },          // plain text per book for library content search
+  reflow: { keyPath: 'id' },         // cached Book view of PDFs
   annotations: { keyPath: 'id', indexes: ['bookId'] },
   bookmarks: { keyPath: 'id', indexes: ['bookId'] },
   notes: { keyPath: 'id' },
