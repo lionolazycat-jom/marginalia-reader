@@ -5,6 +5,7 @@ import { uid, quickHash, dayKey } from './util.js';
 import { detectFormat, readMeta, loadFlowBook, htmlToText, UnsupportedError } from './formats.js';
 import { openPdf, pageText as pdfPageText, closePdf } from './pdfcore.js';
 import { DEFAULT_READING, DEFAULT_UI } from './settings.js';
+import { categorize } from './freebooks.js';
 
 const listeners = new Map();
 export function on(ev, fn) { if (!listeners.has(ev)) listeners.set(ev, new Set()); listeners.get(ev).add(fn); return () => listeners.get(ev).delete(fn); }
@@ -78,6 +79,7 @@ export async function importFile(file, { quiet } = {}) {
     fileName: file.name, size: file.size, pages: meta.pages || null, language: meta.language || '',
     addedAt: now, lastOpenedAt: 0, progress: 0, location: null, pageLabel: '', locked: !!meta.locked,
     collections: [], finishedAt: null, readingSeconds: 0, settings: null, hasCover: !!meta.cover, indexed: false,
+    subjects: (meta.subjects || []).slice(0, 12), categories: categorize(meta.subjects || []),
   };
   await db.put('files', { id, blob: file });
   if (meta.cover) await db.put('covers', { id, blob: meta.cover });

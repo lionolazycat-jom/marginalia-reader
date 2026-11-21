@@ -9,7 +9,7 @@ import { openReader, activeReader, showShortcuts, listVoices, sortVoices, VOICE_
 import { installState, promptInstall, onInstallChange, initPwa } from './pwa.js';
 import { exportAnnotationList, report, safeName } from './exporter.js';
 import { WELCOME_MD } from './welcome.js';
-import { SHELVES, LANGUAGES, search as searchFree, downloadBook, gutenbergPage } from './freebooks.js';
+import { SHELVES, LANGUAGES, CATEGORIES, categorize, categoryLabel, search as searchFree, downloadBook, gutenbergPage } from './freebooks.js';
 
 const NAV = [
   ['home', 'Home', 'home'],
@@ -25,7 +25,7 @@ const NAV = [
 const VIEWS = {};
 let view = 'home';
 let viewArg = null;
-const lib = { q: '', status: 'all', format: 'all', collection: 'all', content: false };
+const lib = { q: '', status: 'all', format: 'all', collection: 'all', category: 'all', content: false };
 
 // ---------------- boot ----------------
 export async function boot() {
@@ -208,7 +208,7 @@ function statusOf(b) {
 function bookMenu(anchor, b) {
   menu(anchor, [
     { label: 'Open', icon: 'book', run: () => openBook(b) },
-    { label: 'Edit title & author', icon: 'edit', run: () => editBook(b) },
+    { label: 'Edit details & categories', icon: 'edit', run: () => editBook(b) },
     { label: 'Collections…', icon: 'collection', run: () => pickCollections(b) },
     { label: b.finishedAt ? 'Mark as unread' : 'Mark as finished', icon: 'check', run: () => updateBook(b, b.finishedAt ? { finishedAt: null } : { finishedAt: Date.now(), progress: Math.max(b.progress, 1) }) },
     { label: 'Reset reading progress', icon: 'back', run: () => updateBook(b, { progress: 0, location: null, pageLabel: '', finishedAt: null }) },
@@ -218,8 +218,15 @@ function bookMenu(anchor, b) {
 }
 
 async function editBook(b) {
-  const r = await dialog({ title: 'Edit details', fields: [{ name: 'title', label: 'Title', value: b.title }, { name: 'author', label: 'Author', value: b.author }], actions: [{ label: 'Cancel', value: false }, { label: 'Save', value: true, primary: true }] });
-  if (r?.action) { await updateBook(b, { title: r.values.title.trim() || b.title, author: r.values.author.trim() }); toast('Details saved'); }
+  const sel = new Set(b.categories || []);
+  const box = h('fieldset.cat-pick', h('legend', 'Categories'), CATEGORIES.map((c) => {
+    const id = 'cat-' + c.key;
+    const cb = h('input', { type: 'checkbox', id, checked: sel.has(c.key) });
+    cb.addEventListener('change', () => (cb.checked ? sel.add(c.key) : sel.delete(c.key)));
+    return h('label.chip.check-chip', { for: id }, cb, h('span', c.label));
+  }));
+  const r = await dialog({ title: 'Edit details', body: box, fields: [{ name: 'title', label: 'Title', value: b.title }, { name: 'author', label: 'Author', value: b.author }], actions: [{ label: 'Cancel', value: false }, { label: 'Save', value: true, primary: true }] });
+  if (r?.action) { await updateBook(b, { title: r.values.title.trim() || b.title, author: r.values.author.trim(), categories: [...sel] }); toast('Details saved'); }
 }
 
 async function confirmRemove(b) {
@@ -386,8 +393,14 @@ function renderLibrary(page, coll) {
     !coll && state.collections.length ? h('span.chip-sep') : null,
     !coll && state.collections.length ? h('select.chip-select', { 'aria-label': 'Collection', onchange: (e) => { lib.collection = e.target.value; rerender(); } }, h('option', { value: 'all' }, 'All collections'), state.collections.map((c) => h('option', { value: c.id, selected: lib.collection === c.id }, c.name))) : null);
   page.append(chips);
+  const usedCats = CATEGORIES.filter((c) => scope.some((b) => b.categories?.includes(c.key)));
+  if (usedCats.length) {
+    page.append(h('div.chips.lib-chips.cat-chips', { role: 'group', 'aria-label': 'Categories' },
+      h('button', { type: 'button', class: `chip ${lib.category === 'all' ? 'on' : ''}`, onclick: () => { lib.category = 'all'; rerender(); } }, 'All categories'),
+      usedCats.map((c) => h('button', { type: 'button', class: `chip ${lib.category === c.key ? 'on' : ''}`, 'aria-pressed': lib.category === c.key ? 'true' : 'false', onclick: () => { lib.category = lib.category === c.key ? 'all' : c.key; rerender(); } }, c.label, h('span.chip-n', String(scope.filter((b) => b.categories?.includes(c.key)).length))))));
+  }
 
-  let books = scope.filter((b) => (lib.status === 'all' || statusOf(b) === lib.status) && (lib.format === 'all' || b.format === lib.format) && (coll || lib.collection === 'all' || b.collections?.includes(lib.collection)));
+  let books = scope.filter((b) => (lib.status === 'all' || statusOf(b) === lib.status) && (lib.format === 'all' || b.format === lib.format) && (lib.category === 'all' || b.categories?.includes(lib.category)) && (coll || lib.collection === 'all' || b.collections?.includes(lib.collection)));
   const q = lib.q.trim().toLowerCase();
   if (lib.content && q.length >= 2) {
     const box = h('div.content-results', h('p.muted', 'Searching inside your books…'));
@@ -467,7 +480,7 @@ async function addBooksToCollection(c) {
 }
 
 // ---------------- FREE BOOKS ----------------
-const free = { q: '', lang: 'en' };
+const free = { q: '', cat: null, lang: 'en' };
 
 VIEWS.free = (page) => {
   page.append(pageHead('Free books', 'Classics from Project Gutenberg: free, legal and yours to keep. Added books work offline like any other.'));
@@ -477,17 +490,22 @@ VIEWS.free = (page) => {
     return;
   }
   const q = h('input#free-q.search-input', { type: 'search', placeholder: 'Search 75,000 free books by title or author', value: free.q, 'aria-label': 'Search free books', enterkeyhint: 'search' });
-  const run = () => { free.q = q.value.trim(); rerender(); };
+  const run = () => { free.q = q.value.trim(); if (free.q) free.cat = null; rerender(); };
   q.addEventListener('search', () => { if (!q.value && free.q) run(); });
   const lang = h('select#free-lang', { 'aria-label': 'Language' }, LANGUAGES.map(([v, l]) => h('option', { value: v, selected: free.lang === v }, l)));
   lang.addEventListener('change', () => { free.lang = lang.value; if (free.q) rerender(); });
   page.append(h('form.lib-tools', { onsubmit: (e) => { e.preventDefault(); q.blur(); run(); } }, h('div.search-wrap', icon('search', 18), q), h('div.lib-tools-right', lang, h('button.btn.btn-primary', { type: 'submit' }, 'Search'))));
   if (!navigator.onLine) page.append(h('p.hint', 'You’re offline. You can browse the shelves; adding a book needs a connection.'));
+  page.append(h('div.chips.cat-chips', { role: 'group', 'aria-label': 'Categories' },
+    h('button', { type: 'button', class: `chip ${!free.cat && !free.q ? 'on' : ''}`, onclick: () => { free.cat = null; free.q = ''; rerender(); } }, 'Shelves'),
+    CATEGORIES.map((c) => h('button', { type: 'button', class: `chip ${free.cat === c.key ? 'on' : ''}`, 'aria-pressed': free.cat === c.key ? 'true' : 'false', onclick: () => { free.cat = c.key; free.q = ''; rerender(); } }, c.label))));
 
-  if (free.q) {
+  if (free.q || free.cat) {
+    const cat = free.cat && !free.q ? CATEGORIES.find((c) => c.key === free.cat) : null;
     const box = h('section.free-results');
     page.append(box);
-    box.append(h('div.shelf-head', h('h2', `Results for “${free.q}”`), h('button.link', { type: 'button', onclick: () => { free.q = ''; rerender(); } }, 'Back to shelves')));
+    box.append(h('div.shelf-head', h('h2', cat ? cat.label : `Results for “${free.q}”`), h('button.link', { type: 'button', onclick: () => { free.q = ''; free.cat = null; rerender(); } }, 'Back to shelves')));
+    if (cat) box.append(h('p.hint', 'Most-read first. Everything here is free and yours to keep.'));
     const note = h('div');
     const grid = h('div.book-grid.free-grid');
     const more = h('div.row.center');
@@ -495,10 +513,10 @@ VIEWS.free = (page) => {
     const load = async (pg) => {
       more.textContent = '';
       more.append(h('div.spinner.small'));
-      const r = await searchFree({ q: free.q, lang: free.lang, page: pg });
-      if (r.unavailable) note.replaceChildren(h('p.hint', 'The full Gutenberg catalogue isn’t answering right now, so these results come from the shelves below. Try again later for everything.'));
+      const r = await searchFree({ q: cat ? '' : free.q, cat: cat?.key, lang: free.lang, page: pg });
+      if (r.unavailable) note.replaceChildren(h('p.hint', cat ? 'The full Gutenberg catalogue isn’t answering right now, so this shows only the books that come with the app. Try again later for the whole category.' : 'The full Gutenberg catalogue isn’t answering right now, so these results come from the shelves below. Try again later for everything.'));
       else if (r.offline) note.replaceChildren(h('p.hint', 'Showing results saved from earlier.'));
-      if (pg === 1 && !r.books.length) grid.replaceWith(h('p.empty-note', `No free books found for “${free.q}”. Try the author’s surname or fewer words.`));
+      if (pg === 1 && !r.books.length) grid.replaceWith(h('p.empty-note', cat ? 'Nothing to show in this category right now. Try again when you’re online and the catalogue is up.' : `No free books found for “${free.q}”. Try the author’s surname or fewer words.`));
       for (const b of r.books) grid.append(freeCard(b));
       more.textContent = '';
       if (r.next) more.append(h('button.btn', { type: 'button', onclick: () => load(r.next) }, 'Show more'));
@@ -552,7 +570,7 @@ async function freeDetail(b) {
     if (norm(res.book.title) && norm(b.title) && !norm(res.book.title).includes(norm(b.title).split(' ')[0]) && !norm(b.title).includes(norm(res.book.title).split(' ')[0])) {
       toast(`Note: Project Gutenberg sent “${res.book.title}”.`, { ms: 7000 });
     }
-    const patch = { source: `gutenberg:${b.id}` };
+    const patch = { source: `gutenberg:${b.id}`, categories: categorize([...(b.subjects || []), ...(res.book.subjects || [])], [...(res.book.categories || []), ...(free.cat ? [free.cat] : []), 'classics']) };
     if (b.author && !res.book.author) patch.author = b.author;
     await updateBook(res.book, patch);
     busy.remove();

@@ -74,7 +74,7 @@ export async function readMeta(file, format) {
   if (format === 'epub') {
     const z = await Zip.open(file);
     const opf = await epubPackage(z);
-    return { ...base, title: opf.title || base.title, author: opf.author, cover: opf.coverPath ? await z.blobOf(opf.coverPath).catch(() => null) : null, language: opf.language };
+    return { ...base, title: opf.title || base.title, author: opf.author, cover: opf.coverPath ? await z.blobOf(opf.coverPath).catch(() => null) : null, language: opf.language, subjects: opf.subjects };
   }
   if (format === 'fb2') {
     const doc = parseXml(decodeText(new Uint8Array(await file.arrayBuffer())));
@@ -89,7 +89,8 @@ export async function readMeta(file, format) {
       const bin = [...doc.getElementsByTagName('binary')].find((b) => b.getAttribute('id') === href);
       if (bin) cover = b64Blob(bin.textContent, bin.getAttribute('content-type'));
     }
-    return { ...base, title: title || base.title, author, cover };
+    const subjects = [...(ti?.querySelectorAll('genre') || [])].map((g) => g.textContent.replace(/_/g, ' '));
+    return { ...base, title: title || base.title, author, cover, subjects };
   }
   if (format === 'cbz') {
     const z = await Zip.open(file);
@@ -163,7 +164,8 @@ async function epubPackage(z) {
   const nav = [...manifest.values()].find((m) => m.props.split(/\s+/).includes('nav'));
   const ncx = manifest.get(spineEl?.getAttribute('toc')) || [...manifest.values()].find((m) => m.type === 'application/x-dtbncx+xml');
   const creators = byTag('creator').map((c) => c.textContent.trim()).filter(Boolean);
-  return { opfPath, title: meta('title'), author: creators.join(', '), language: meta('language'), spine, manifest, coverPath, nav, ncx };
+  const subjects = byTag('subject').map((x) => x.textContent.trim()).filter(Boolean);
+  return { opfPath, title: meta('title'), author: creators.join(', '), language: meta('language'), subjects, spine, manifest, coverPath, nav, ncx };
 }
 
 async function epubToc(z, pkg) {

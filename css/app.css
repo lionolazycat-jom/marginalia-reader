@@ -846,3 +846,12 @@ body.is-reading .app { visibility: hidden; }
 @media (max-width: 480px) { .free-detail { grid-template-columns: 96px 1fr; gap: 12px; } }
 .warn-hint { color: var(--warn) !important; }
 .reader[data-dark="1"] .warn-hint { color: #E2B865 !important; }
+.cat-chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.cat-chips .chip { flex: none; }
+.cat-pick { border: 0; padding: 0; margin: 0 0 4px; display: flex; flex-wrap: wrap; gap: 6px; order: 9; }
+.cat-pick legend { font-size: 13.5px; font-weight: 550; margin-bottom: 6px; padding: 0; }
+.check-chip { cursor: pointer; }
+.check-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.check-chip:has(input:checked) { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.check-chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dialog-actions { order: 10; }
