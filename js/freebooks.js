@@ -9,7 +9,8 @@ const GUTENDEX = 'https://gutendex.com';
 
 // Hand-picked shelves ship with the app, so they appear instantly and offline.
 const B = (id, title, author) => ({ id, title, author, authors: [author], cover: coverUrl(id), subjects: [], languages: ['en'], downloads: 0, hasEpub: true, summary: '' });
-export const coverUrl = (id) => `https://aleph.gutenberg.org/cache/epub/${id}/pg${id}.cover.medium.jpg`;
+// Covers come from Gutenberg's own pglaf mirror through the relay: it stays up when gutenberg.org is down.
+export const coverUrl = (id) => `https://marginalia-books.vercel.app/pglaf/cache/epub/${id}/pg${id}.cover.medium.jpg`;
 export const SHELVES = [
   { key: 'start', label: 'Start here', books: [B(1342, 'Pride and Prejudice', 'Jane Austen'), B(84, 'Frankenstein', 'Mary Shelley'), B(64317, 'The Great Gatsby', 'F. Scott Fitzgerald'), B(1661, 'The Adventures of Sherlock Holmes', 'Arthur Conan Doyle'), B(11, 'Alice’s Adventures in Wonderland', 'Lewis Carroll'), B(174, 'The Picture of Dorian Gray', 'Oscar Wilde'), B(345, 'Dracula', 'Bram Stoker'), B(2701, 'Moby-Dick', 'Herman Melville'), B(1260, 'Jane Eyre', 'Charlotte Brontë'), B(5200, 'Metamorphosis', 'Franz Kafka')] },
   { key: 'women', label: 'Women writers & women’s lives', books: [B(3420, 'A Vindication of the Rights of Woman', 'Mary Wollstonecraft'), B(160, 'The Awakening', 'Kate Chopin'), B(32, 'Herland', 'Charlotte Perkins Gilman'), B(1952, 'The Yellow Wallpaper', 'Charlotte Perkins Gilman'), B(145, 'Middlemarch', 'George Eliot'), B(541, 'The Age of Innocence', 'Edith Wharton'), B(4276, 'North and South', 'Elizabeth Gaskell'), B(768, 'Wuthering Heights', 'Emily Brontë'), B(1260, 'Jane Eyre', 'Charlotte Brontë'), B(514, 'Little Women', 'Louisa May Alcott')] },
@@ -157,11 +158,12 @@ export async function search({ q = '', cat = null, lang = 'en', page = 1 } = {})
 const OL_LANG = { en: 'eng', fr: 'fre', de: 'ger', es: 'spa', it: 'ita', pt: 'por', nl: 'dut', fi: 'fin', zh: 'chi', tl: 'tgl' };
 /** Open Library search, limited to books that can be read and downloaded for free. */
 async function openLibrarySearch({ q, topic }, lang, page) {
-  const url = `https://openlibrary.org/search.json?${qs({ q: topic ? null : q, subject: topic || null, has_fulltext: 'true', ebook_access: 'public', language: OL_LANG[lang] || 'eng', fields: 'key,title,author_name,cover_i,ia,first_publish_year,subject', limit: 24, page: page > 1 ? page : null, sort: topic ? 'readinglog' : null })}`;
+  const url = `https://openlibrary.org/search.json?${qs({ q: topic ? null : q, subject: topic || null, has_fulltext: 'true', ebook_access: 'public', language: OL_LANG[lang] || 'eng', fields: 'key,title,author_name,cover_i,ia,first_publish_year,subject,ebook_access,public_scan_b', limit: 24, page: page > 1 ? page : null, sort: topic ? 'readinglog' : null })}`;
   const r = await fetchT(url, 8000);
   if (!r.ok) throw new Error('openlibrary ' + r.status);
   const data = await r.json();
-  const books = (data.docs || []).filter((d) => Array.isArray(d.ia) && d.ia.length && d.title).map((d) => ({
+  // Only truly free scans. 'borrowable' and 'printdisabled' books are in copyright and can only be borrowed on archive.org.
+  const books = (data.docs || []).filter((d) => Array.isArray(d.ia) && d.ia.length && d.title && (d.ebook_access === 'public' || (d.ebook_access == null && d.public_scan_b === true))).map((d) => ({
     id: 'ia:' + d.ia[0], ia: d.ia[0], title: d.title, author: (d.author_name || [])[0] || '', authors: d.author_name || [],
     cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : '', subjects: (d.subject || []).slice(0, 8), languages: [lang],
     downloads: 0, hasEpub: true, summary: '', from: 'Open Library', page: `https://archive.org/details/${d.ia[0]}`,
@@ -206,6 +208,7 @@ async function downloadArchive(book, onProgress) {
     let r;
     try { r = await fetch(`https://archive.org/download/${book.ia}/${book.ia}.${ext}`, { mode: 'cors' }); }
     catch { throw new Error(navigator.onLine ? 'The Internet Archive didn’t answer. Try again in a moment, or open the book on archive.org.' : 'You’re offline. Connect to the internet to download books.'); }
+    if (r.status === 401 || r.status === 403) throw new Error('This book is still in copyright. The Internet Archive only lends it: borrow it on archive.org with a free account. It can’t be downloaded into Marginalia.');
     if (!r.ok || /text\/html/.test(r.headers.get('content-type') || '')) continue;
     const blob = await readBlob(r, type, onProgress);
     if (blob.size > 1000) return new File([blob], `${safe}.${ext}`, { type });
@@ -213,17 +216,27 @@ async function downloadArchive(book, onProgress) {
   throw new Error('This book can’t be downloaded from the Internet Archive. Use “View on Internet Archive” to read it there.');
 }
 
+async function isZip(blob) {
+  const b = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+  return b[0] === 0x50 && b[1] === 0x4b && b[2] === 3 && b[3] === 4;
+}
+
 export async function downloadBook(book, onProgress) {
   if (book.ia) return downloadArchive(book, onProgress);
   const id = book.id;
   const files = [`pg${id}-images-3.epub`, `pg${id}-images.epub`, `pg${id}.epub`];
-  // The aleph mirror stays up when the main site is under maintenance.
-  const paths = files.flatMap((f) => [`/aleph/cache/epub/${id}/${f}`, `/gutenberg/cache/epub/${id}/${f}`]);
+  // Gutenberg's own mirrors first (pglaf, then Old Dominion University); they stay up when gutenberg.org is down.
+  const paths = [
+    ...files.map((f) => `/pglaf/cache/epub/${id}/${f}`),
+    ...files.map((f) => `/odu/epub/${id}/${f}`),
+    ...files.map((f) => `/aleph/cache/epub/${id}/${f}`),
+    ...files.map((f) => `/gutenberg/cache/epub/${id}/${f}`),
+  ];
   let lastStatus = 0;
   for (const p of paths) {
     let r;
-    try { r = await fetch(`${RELAY}${p}`, { mode: 'cors' }); }
-    catch { throw new Error(navigator.onLine ? 'The download couldn’t start. Try again in a moment.' : 'You’re offline. Connect to the internet to download books.'); }
+    try { r = await fetchT(`${RELAY}${p}`, 20000); }
+    catch { if (!navigator.onLine) throw new Error('You’re offline. Connect to the internet to download books.'); lastStatus = 503; continue; }
     if (!r.ok || /text\/html/.test(r.headers.get('content-type') || '')) { lastStatus = r.ok ? 503 : r.status; continue; }
     const total = +r.headers.get('content-length') || 0;
     const reader = r.body?.getReader?.();
@@ -233,11 +246,11 @@ export async function downloadBook(book, onProgress) {
       for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; onProgress?.(total ? got / total : null); }
       blob = new Blob(chunks, { type: 'application/epub+zip' });
     } else blob = await r.blob();
-    if (blob.size < 1000) { lastStatus = 204; continue; }
+    if (blob.size < 1000 || !(await isZip(blob))) { lastStatus = 503; continue; }   // an error page, not a book
     const safe = `${book.title}${book.author ? ' - ' + book.author : ''}`.replace(/[\\/:*?"<>|]+/g, '').slice(0, 90);
     return new File([blob], `${safe}.epub`, { type: 'application/epub+zip' });
   }
-  throw new Error(lastStatus === 404 ? 'Project Gutenberg doesn’t have an EPUB for this book.' : lastStatus === 503 ? 'Project Gutenberg is down for maintenance. Try again in a few hours.' : `The download failed (${lastStatus || 'network'}). Try again later.`);
+  throw new Error(lastStatus === 404 ? 'Project Gutenberg doesn’t have an EPUB for this book.' : lastStatus === 503 ? 'Project Gutenberg and its mirrors didn’t send this book right now. Try again in a while.' : `The download failed (${lastStatus || 'network'}). Try again later.`);
 }
 
 export const gutenbergPage = (id) => `https://www.gutenberg.org/ebooks/${id}`;

@@ -590,8 +590,10 @@ async function freeDetail(b) {
     if (view === 'free') rerender();
   } catch (e) {
     busy.remove();
-    dialog({ title: 'The book couldn’t be added', body: h('div', h('p', e.message), h('p.hint', 'You can also download it from Project Gutenberg in your browser, then add it here with Add books.')), actions: [{ label: 'Close', value: false }, { label: 'Open Gutenberg page', value: 'pg', primary: true }] })
-      .then((v) => { if (v === 'pg') { const a = h('a', { href: gutenbergPage(b.id), target: '_blank', rel: 'noopener noreferrer' }); document.body.append(a); a.click(); a.remove(); } });
+    const ia = !!b.ia;
+    const url = ia ? (b.page || `https://archive.org/details/${b.ia}`) : `https://gutenberg.pglaf.org/cache/epub/${b.id}/`;
+    dialog({ title: 'The book couldn’t be added', body: h('div', h('p', e.message), h('p.hint', ia ? 'You can open it on the Internet Archive instead.' : 'You can also download the EPUB from Project Gutenberg’s mirror in your browser, then add it here with Add books.')), actions: [{ label: 'Close', value: false }, { label: ia ? 'Open on Internet Archive' : 'Open Gutenberg mirror', value: 'go', primary: true }] })
+      .then((v) => { if (v === 'go') { const a = h('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }); document.body.append(a); a.click(); a.remove(); } });
   }
 }
 
