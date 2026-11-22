@@ -8,7 +8,7 @@ import { HL_COLORS, ACCENTS } from './settings.js';
 import { openReader, activeReader, showShortcuts, listVoices, sortVoices, VOICE_STYLES } from './reader.js';
 import { installState, promptInstall, onInstallChange, initPwa } from './pwa.js';
 import { exportAnnotationList, report, safeName } from './exporter.js';
-import { WELCOME_MD } from './welcome.js';
+import { WELCOME_MD, GUIDE_VERSION, GUIDE_TITLE } from './welcome.js';
 import { SHELVES, LANGUAGES, CATEGORIES, categorize, categoryLabel, search as searchFree, downloadBook, gutenbergPage, localForCategory, bookFromLink } from './freebooks.js';
 
 const NAV = [
@@ -42,9 +42,22 @@ export async function boot() {
   on('reader-closed', () => { if (location.hash.startsWith('#book-')) history.replaceState(null, '', '#' + (lastView || 'home')); rerender(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyAppTheme);
   if (!persistent) toast('Storage is unavailable in this browser view, so your library won’t be saved after you close the page.', { kind: 'error', ms: 9000 });
+  const guideFile = () => new File([WELCOME_MD], GUIDE_TITLE + '.md', { type: 'text/markdown' });
   if (!(await db.kvGet('seeded')) && !state.books.length) {
     await db.kvSet('seeded', true);
-    try { await importFile(new File([WELCOME_MD], 'The Serein Field Guide.md', { type: 'text/markdown' })); } catch (e) { console.warn(e); }
+    await db.kvSet('guideVersion', GUIDE_VERSION);
+    try { await importFile(guideFile()); } catch (e) { console.warn(e); }
+  } else if ((await db.kvGet('guideVersion') || 1) < GUIDE_VERSION) {
+    // A new edition of the guide: swap out the old one, unless the reader has marked it up.
+    await db.kvSet('guideVersion', GUIDE_VERSION);
+    const old = state.books.filter((b) => /^The (Marginalia|Serein) Field Guide$/.test(b.title || ''));
+    if (old.length) {
+      for (const b of old) {
+        const used = state.annotations.some((a) => a.bookId === b.id) || state.bookmarks.some((a) => a.bookId === b.id);
+        if (!used) await removeBook(b.id).catch(() => {});
+      }
+      try { await importFile(guideFile()); } catch (e) { console.warn(e); }
+    }
   }
   window.addEventListener('hashchange', route);
   route();
