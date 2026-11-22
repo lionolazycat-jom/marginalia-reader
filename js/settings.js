@@ -13,11 +13,11 @@ export const FONTS = {
 
 // bg, fg, muted, line (rules/borders), sel (selection), chrome (toolbar bg)
 export const THEMES = {
-  paper: { label: 'Paper', bg: '#F8F6F1', fg: '#24221E', muted: '#77726A', line: '#E4E0D8', chrome: '#F8F6F1', dark: false },
+  paper: { label: 'Paper', bg: '#F9F5EE', fg: '#2B2622', muted: '#776C62', line: '#E6DDD1', chrome: '#F9F5EE', dark: false },
   white: { label: 'White', bg: '#FFFFFF', fg: '#161616', muted: '#6B6B6B', line: '#E6E6E6', chrome: '#FFFFFF', dark: false },
   sepia: { label: 'Sepia', bg: '#F1E6CF', fg: '#47392A', muted: '#86745D', line: '#DFD0B2', chrome: '#EFE3CA', dark: false },
   sage: { label: 'Sage', bg: '#E4E9E0', fg: '#25302A', muted: '#66736A', line: '#CFD8CB', chrome: '#E1E7DD', dark: false },
-  dusk: { label: 'Dusk', bg: '#272624', fg: '#DAD4C8', muted: '#958F84', line: '#3A3835', chrome: '#2C2B29', dark: true },
+  dusk: { label: 'Dusk', bg: '#25211D', fg: '#DED5C8', muted: '#998E81', line: '#3A342E', chrome: '#2A2622', dark: true },
   night: { label: 'Night', bg: '#000000', fg: '#B9B3A8', muted: '#77736C', line: '#1E1E1E', chrome: '#0B0B0B', dark: true },
   custom: { label: 'Custom', dark: false },
 };
@@ -31,6 +31,7 @@ export const HL_COLORS = {
 };
 
 export const ACCENTS = {
+  serein: { label: 'Serein', light: '#7A5F4C', dark: '#CDAE92' },
   bookcloth: { label: 'Bookcloth', light: '#2F5D50', dark: '#7FB8A6' },
   ink: { label: 'Ink', light: '#2D4E80', dark: '#8EB0E6' },
   oxblood: { label: 'Oxblood', light: '#7D2F33', dark: '#E39A9C' },
@@ -80,7 +81,7 @@ export const DEFAULT_READING = {
 
 export const DEFAULT_UI = {
   appTheme: 'auto',
-  accent: 'bookcloth',
+  accent: 'serein',
   customAccent: '',
   libraryView: 'grid',
   librarySort: 'opened',

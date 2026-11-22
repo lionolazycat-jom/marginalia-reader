@@ -16,7 +16,7 @@ import { exportBookAnnotations } from './exporter.js';
 
 let current = null;
 export const activeReader = () => current;
-window.marginalia = { get reader() { return current; } };
+window.serein = window.marginalia = { get reader() { return current; } };
 
 export async function openReader(book, opts = {}) {
   if (current) await current.close(true);

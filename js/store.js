@@ -33,6 +33,8 @@ export async function loadAll() {
   state.reading = { ...DEFAULT_READING, ...(reading || {}) };
   if (reading && !reading.turnV2) { state.reading.pageAnim = reading.pageAnim === 'none' ? 'none' : 'curl'; state.reading.turnV2 = true; db.kvSet('reading', state.reading).catch(() => {}); }
   state.ui = { ...DEFAULT_UI, ...(ui || {}), toolbar: { ...DEFAULT_UI.toolbar, ...((ui && ui.toolbar) || {}) } };
+  // One-time, at the rename to Serein: the old default accent (bookcloth green) becomes Serein's dusty brown.
+  if (!state.ui.sereinV1) { if (!ui || !ui.accent || ui.accent === 'bookcloth') state.ui.accent = 'serein'; state.ui.sereinV1 = true; db.kvSet('ui', state.ui).catch(() => {}); }
   // One-time: keep the toolbar showing by default (it's hard to find when it hides itself).
   if (!state.ui.toolbarShownV2) { state.ui.toolbarAutoHide = false; state.ui.toolbarShownV2 = true; db.kvSet('ui', state.ui).catch(() => {}); }
 }
@@ -272,13 +274,13 @@ export function todaySeconds() { return state.days.find((d) => d.date === dayKey
 // ---------- backup ----------
 export async function exportBackup() {
   const [books, annotations, bookmarks, notes, collections, days] = await Promise.all(['books', 'annotations', 'bookmarks', 'notes', 'collections', 'days'].map((s) => db.all(s)));
-  return JSON.stringify({ app: 'marginalia', version: 1, exportedAt: new Date().toISOString(), books, annotations, bookmarks, notes, collections, days, reading: state.reading, ui: state.ui }, null, 1);
+  return JSON.stringify({ app: 'serein', version: 1, exportedAt: new Date().toISOString(), books, annotations, bookmarks, notes, collections, days, reading: state.reading, ui: state.ui }, null, 1);
 }
 
 export async function importBackup(text) {
   let data;
   try { data = JSON.parse(text); } catch { throw new Error('This file is not a valid backup (it is not JSON).'); }
-  if (data.app !== 'marginalia') throw new Error('This JSON file is not a Marginalia backup.');
+  if (data.app !== 'serein' && data.app !== 'marginalia') throw new Error('This JSON file is not a Serein backup.');   // backups made before the rename say 'marginalia'
   let added = 0;
   for (const b of data.books || []) {
     if (bookById(b.id)) continue;

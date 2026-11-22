@@ -1,4 +1,8 @@
-# Marginalia Reader
+# Serein
+
+*A quiet place to get lost in words.*
+
+Serein (formerly Marginalia Reader) is a private, offline reading sanctuary for PDFs and e-books: read, highlight, annotate, bookmark and keep the words that matter.
 
 A private e-book and PDF reader that installs on your phone as an app (PWA).
 

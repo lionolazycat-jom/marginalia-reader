@@ -29,13 +29,13 @@ export async function promptInstall() {
   const { outcome } = await deferred.userChoice.catch(() => ({ outcome: 'dismissed' }));
   deferred = null;
   changed();
-  if (outcome === 'accepted') toast('Installing Marginalia…');
+  if (outcome === 'accepted') toast('Installing Serein…');
   return outcome === 'accepted';
 }
 
 export function initPwa() {
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; changed(); });
-  window.addEventListener('appinstalled', () => { deferred = null; changed(); toast('Marginalia is installed. Open it from your home screen.'); });
+  window.addEventListener('appinstalled', () => { deferred = null; changed(); toast('Serein is installed. Open it from your home screen.'); });
   if (embedded() || !('serviceWorker' in navigator) || location.protocol === 'file:') return;
   navigator.serviceWorker.register('./sw.js').then((reg) => {
     const ready = () => { offlineReady = true; changed(); };
@@ -47,7 +47,7 @@ export function initPwa() {
         if (w.state === 'installed' && navigator.serviceWorker.controller) {
           // Away from a book, switch to the new version straight away; mid-book, ask.
           if (!document.body.classList.contains('is-reading')) { w.postMessage('skip-waiting'); return; }
-          toast('A new version of Marginalia is ready.', { ms: 15000, action: { label: 'Update', run: () => { w.postMessage('skip-waiting'); } } });
+          toast('A new version of Serein is ready.', { ms: 15000, action: { label: 'Update', run: () => { w.postMessage('skip-waiting'); } } });
         }
       });
     };

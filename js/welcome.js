@@ -1,6 +1,6 @@
 // A short guide that ships with the app so a new library opens with something real to read.
 
-export const WELCOME_MD = `# The Marginalia Field Guide
+export const WELCOME_MD = `# The Serein Field Guide
 
 *A short book about this reader. Delete it whenever you like.*
 
@@ -10,7 +10,7 @@ Every book you add is stored inside this browser on this device. Nothing is uplo
 
 Because the library lives in your browser, clearing your browser's site data removes it. Use **Preferences → Back up** now and then to save your highlights, notes, bookmarks and reading history to a file.
 
-Add books with the **Add books** button or by dropping files anywhere on the window. Marginalia reads PDF, EPUB, plain text, Markdown, HTML, FB2 and CBZ comics. Kindle files (MOBI, AZW) are not supported; the free tool Calibre converts them to EPUB.
+Add books with the **Add books** button or by dropping files anywhere on the window. Serein reads PDF, EPUB, plain text, Markdown, HTML, FB2 and CBZ comics. Kindle files (MOBI, AZW) are not supported; the free tool Calibre converts them to EPUB.
 
 ## Turning pages
 
@@ -46,7 +46,7 @@ The speaker button, or **R**, reads the book aloud from where you are, sentence 
 
 ## Keeping track
 
-Marginalia counts the minutes you spend reading, but only while the page is in front of you and you are actually reading. Set a daily goal and a yearly book goal under **Statistics**, and watch your streak grow.
+Serein counts the minutes you spend reading, but only while the page is in front of you and you are actually reading. Set a daily goal and a yearly book goal under **Statistics**, and watch your streak grow.
 
 Happy reading.
 `;

@@ -211,7 +211,7 @@ async function downloadArchive(book, onProgress) {
     let r;
     try { r = await fetch(`https://archive.org/download/${book.ia}/${book.ia}.${ext}`, { mode: 'cors' }); }
     catch { throw new Error(navigator.onLine ? 'The Internet Archive didn’t answer. Try again in a moment, or open the book on archive.org.' : 'You’re offline. Connect to the internet to download books.'); }
-    if (r.status === 401 || r.status === 403) throw new Error('This book is still in copyright. The Internet Archive only lends it: borrow it on archive.org with a free account. It can’t be downloaded into Marginalia.');
+    if (r.status === 401 || r.status === 403) throw new Error('This book is still in copyright. The Internet Archive only lends it: borrow it on archive.org with a free account. It can’t be downloaded into Serein.');
     if (!r.ok || /text\/html/.test(r.headers.get('content-type') || '')) continue;
     const blob = await readBlob(r, type, onProgress);
     if (blob.size > 1000) return new File([blob], `${safe}.${ext}`, { type });

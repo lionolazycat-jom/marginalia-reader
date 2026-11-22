@@ -1,6 +1,7 @@
 // IndexedDB persistence. Book files live in their own store so library listing never loads blobs.
 // Falls back to an in-memory store (with a visible warning) when IndexedDB is unavailable.
 
+// Kept from before the rename to Serein: changing it would orphan every saved book, highlight and setting.
 const DB_NAME = 'marginalia';
 const DB_VERSION = 2;
 const STORES = {

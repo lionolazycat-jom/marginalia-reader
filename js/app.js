@@ -44,7 +44,7 @@ export async function boot() {
   if (!persistent) toast('Storage is unavailable in this browser view, so your library won’t be saved after you close the page.', { kind: 'error', ms: 9000 });
   if (!(await db.kvGet('seeded')) && !state.books.length) {
     await db.kvSet('seeded', true);
-    try { await importFile(new File([WELCOME_MD], 'The Marginalia Field Guide.md', { type: 'text/markdown' })); } catch (e) { console.warn(e); }
+    try { await importFile(new File([WELCOME_MD], 'The Serein Field Guide.md', { type: 'text/markdown' })); } catch (e) { console.warn(e); }
   }
   window.addEventListener('hashchange', route);
   route();
@@ -88,11 +88,25 @@ function applyAppTheme() {
   if (accent) document.documentElement.style.setProperty('--accent', accent); else document.documentElement.style.removeProperty('--accent');
 }
 
+// Serein's mark: fine rain falling on an open book.
+const SVGNS = 'http://www.w3.org/2000/svg';
+export function brandMark(cls = 'serein-mark') {
+  const svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 32 32'); svg.setAttribute('class', cls); svg.setAttribute('aria-hidden', 'true');
+  const g = document.createElementNS(SVGNS, 'g');
+  for (const [k, v] of Object.entries({ fill: 'none', stroke: 'currentColor', 'stroke-linecap': 'round', 'stroke-width': '1.5' })) g.setAttribute(k, v);
+  for (const [d, o, w] of [['M11 2.5 9.5 9M17 1.5 15.5 8M23 3.5 21.5 10M14 11.5l-.75 3.2M20 11l-.75 3.2', null, '1.05'], ['M3.5 21.5c4.2-2.6 8.4-2.6 12.5 0 4.1-2.6 8.3-2.6 12.5 0'], ['M3.5 26.5c4.2-2.6 8.4-2.6 12.5 0 4.1-2.6 8.3-2.6 12.5 0', '.45']]) {
+    const path = document.createElementNS(SVGNS, 'path'); path.setAttribute('d', d); if (o) path.setAttribute('opacity', o); if (w) path.setAttribute('stroke-width', w); g.append(path);
+  }
+  svg.append(g);
+  return svg;
+}
+
 function buildShell() {
   const side = $('#sidebar');
   side.textContent = '';
   side.append(
-    h('div.brand', h('span.brand-mark', { 'aria-hidden': 'true' }), h('span.brand-name', 'Marginalia')),
+    h('a.brand', { href: '#home', 'aria-label': 'Serein, home' }, brandMark(), h('span.brand-name', 'Serein')),
     h('button.btn.btn-primary.btn-import', { type: 'button', onclick: pickFiles }, icon('plus', 18), 'Add books'),
     h('nav.nav', { 'aria-label': 'Sections' }, NAV.map(([k, label, ic]) => h('a.nav-item', { href: '#' + k, dataset: { view: k } }, icon(ic, 19), h('span', label), h('span.nav-count', { dataset: { count: k } })))),
     h('div.side-foot', h('span.lock', icon('check', 14)), h('span', 'Books stay on this device')),
@@ -272,12 +286,12 @@ VIEWS.home = (page) => {
   const added = [...state.books].sort((a, b) => b.addedAt - a.addedAt);
   const hero = reading[0] || added[0];
   const eyebrow = now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-  page.append(h('header.page-head.home-head', h('div', h('p.eyebrow', eyebrow), h('h1', greeting()))));
+  page.append(h('div.home-brand', brandMark(), h('span', 'Serein')), h('header.page-head.home-head', h('div', h('p.eyebrow', eyebrow), h('h1', greeting()), h('p.page-sub.tagline', 'A quiet place to get lost in words.'))));
   const inst = installState();
   if (!inst.installed && (inst.canPrompt || inst.ios) && !state.ui.installHintDismissed) {
     page.append(h('section.install-banner', { role: 'note' },
       h('img', { src: 'icons/icon-192.png', alt: '', width: 44, height: 44 }),
-      h('div', h('strong', 'Put Marginalia on your home screen'), h('p', inst.canPrompt ? 'It opens full screen and works offline, like any app.' : 'In Safari, tap Share, then “Add to Home Screen”. It opens full screen and works offline.')),
+      h('div', h('strong', 'Keep Serein on your home screen'), h('p', inst.canPrompt ? 'It opens full screen and works offline, like any app.' : 'In Safari, tap Share, then “Add to Home Screen”. It opens full screen and works offline.')),
       inst.canPrompt ? h('button.btn.btn-primary.btn-small', { type: 'button', onclick: async () => { await promptInstall(); rerender(); } }, 'Install') : null,
       iconBtn('close', 'Dismiss', () => saveUI({ installHintDismissed: true }).then(rerender), { class: 'mini-btn' })));
   }
@@ -823,7 +837,7 @@ VIEWS.preferences = async (page) => {
 
   const est = await storageEstimate();
   const usage = est ? `${fmtBytes(est.usage)} used${est.quota ? ` of about ${fmtBytes(est.quota)} available` : ''}` : 'Storage size unknown';
-  const backup = h('button.btn', { type: 'button', onclick: async () => { const json = await exportBackup(); report(await saveFile(`marginalia-backup-${dayKey()}.json`, json, 'application/json')); } }, icon('download', 16), 'Back up');
+  const backup = h('button.btn', { type: 'button', onclick: async () => { const json = await exportBackup(); report(await saveFile(`serein-backup-${dayKey()}.json`, json, 'application/json')); } }, icon('download', 16), 'Back up');
   const restore = h('button.btn', { type: 'button', onclick: () => { const inp = h('input.visually-hidden', { type: 'file' }); inp.onchange = () => { if (inp.files[0]) restoreFrom(inp.files[0]); inp.remove(); }; document.body.append(inp); inp.click(); } }, icon('upload', 16), 'Restore from backup');
   const persistBtn = est && !est.persisted ? h('button.btn.btn-small', { type: 'button', onclick: async () => { const ok = await requestPersistence(); toast(ok ? 'Storage is now protected from automatic cleanup.' : 'The browser declined. Your data is still saved, but may be cleared if the device runs low on space.'); rerender(); } }, 'Protect storage') : null;
   page.append(h('section.card.pref', h('h2', 'Your data'),
@@ -878,12 +892,12 @@ VIEWS.preferences = async (page) => {
   // ----- install -----
   const inst = installState();
   page.append(h('section.card.pref', h('h2', 'App on this device'),
-    h('p', inst.installed ? 'Marginalia is installed. It opens full screen from your home screen and works without a connection.' : inst.canPrompt ? 'Install Marginalia to open it from your home screen, full screen and offline.' : inst.ios ? 'On iPhone or iPad: tap the Share button in Safari, then “Add to Home Screen”.' : inst.supported ? 'Use your browser’s menu and choose “Install app” or “Add to Home screen”.' : 'Open this app from its web address in Safari (iPhone/iPad) or Chrome (Android) to install it.'),
+    h('p', inst.installed ? 'Serein is installed. It opens full screen from your home screen and works without a connection.' : inst.canPrompt ? 'Install Serein to open it from your home screen, full screen and offline.' : inst.ios ? 'On iPhone or iPad: tap the Share button in Safari, then “Add to Home Screen”.' : inst.supported ? 'Use your browser’s menu and choose “Install app” or “Add to Home screen”.' : 'Open this app from its web address in Safari (iPhone/iPad) or Chrome (Android) to install it.'),
     inst.canPrompt && !inst.installed ? h('button.btn.btn-primary', { type: 'button', onclick: async () => { await promptInstall(); rerender(); } }, icon('download', 16), 'Install app') : null,
     inst.offlineReady ? h('p.hint', 'Offline copy ready: the app and its PDF engine are saved on this device.') : null));
 
   page.append(h('section.card.pref', h('h2', 'Keyboard'), h('p', 'Arrow keys turn pages; T opens contents, / searches, B bookmarks, R reads aloud, A opens display settings.'), h('button.btn', { type: 'button', onclick: showShortcuts }, 'All shortcuts')));
-  page.append(h('section.card.pref', h('h2', 'About'), h('p', 'Marginalia renders PDFs with PDF.js and reads EPUB, FB2, Markdown, HTML, text and comics with its own engine. It needs no account and keeps working offline once loaded.')));
+  page.append(h('section.card.pref', h('h2', 'About'), h('p', h('em', 'Serein'), ' is named for the fine rain that falls from a clear evening sky. It is a quiet place to read, highlight, annotate and keep the words that matter.'), h('p', 'Serein renders PDFs with PDF.js and reads EPUB, FB2, Markdown, HTML, text and comics with its own engine. It needs no account and keeps working offline once loaded.')));
 };
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
